@@ -171,8 +171,14 @@ export default function Match() {
     setLoading(true); setError(null);
     try {
       await axios.post('/api/profile/save', {
-        spotifyUserId: profile.id, nickname, profileImageUrl, bio,
-      });
+        spotifyUserId: profile.id, 
+        nickname, 
+        profileImageUrl, 
+        bio,
+        // ▼▼▼ この行を追加 ▼▼▼
+        accessToken: access_token, 
+        // ▲▲▲ この行を追加 ▲▲▲
+      }); //
       alert(isNewUser ? 'プロフィールを登録しました！' : 'プロフィールを更新しました！');
       setIsNewUser(false); setIsEditingProfile(false);
     } catch (e: unknown) { // unknown 型を使用
