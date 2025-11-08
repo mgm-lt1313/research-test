@@ -107,6 +107,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // ▲▲▲
 
     await client.query('COMMIT'); // トランザクションコミット
+    
+    // ▼▼▼ 追加 ▼▼▼
+    // プロフィール保存とアーティスト保存が成功したら、
+    // 非同期でグラフ全体の再計算をトリガーする (await しない)
+    fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/batch/calculate-graph`)
+      .catch(err => {
+        console.error('Failed to trigger background graph calculation:', err);
+      });
+    // ▲▲▲ 追加 ▲▲▲
+
     res.status(200).json({ message: 'Profile and artists saved successfully!', userId: userId });
 
   } catch (dbError) {
