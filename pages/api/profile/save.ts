@@ -30,7 +30,7 @@ async function saveAllFollowingArtists(
   }
 
   // 挿入クエリの構築
-  const values: any[] = [];
+  const values: (string | number | null)[] = []; // 👈 any[] から変更
   const queryRows = artists.map((artist, index) => {
     const i = index * 5; // 各行の値のインデックス
     values.push(
