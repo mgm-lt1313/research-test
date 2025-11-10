@@ -9,7 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@vercel/postgres": "^0.10.0",
     "axios": "^1.9.0",
     "graphology": "^0.26.0",
     "graphology-communities-louvain": "^2.0.2",

@@ -1,7 +1,7 @@
 // pages/api/match/get-recommendations.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-// ▼▼▼ 修正: 'PoolClient' や 'VercelPoolClient' のインポートを削除 ▼▼▼
+// 
 
 // 内部UUIDを取得するヘルパー (pool.query を直接使う)
 async function getUserIdBySpotifyId(spotifyUserId: string): Promise<string | null> {
@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        // ▼▼▼ 修正: pool.connect() を使わない ▼▼▼
+        // 
         const selfId = await getUserIdBySpotifyId(spotifyUserId);
         if (!selfId) {
             return res.status(404).json({ message: 'User not found.' });
@@ -79,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const { rows } = await pool.query(query, [selfId, myCommunityId]);
 
         res.status(200).json({ matches: rows });
-        // ▲▲▲ 修正ここまで ▲▲▲
+        // 
 
     } catch (dbError) {
         console.error('Recommendation calculation failed:', dbError);
