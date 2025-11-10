@@ -5,14 +5,15 @@ import Graph from 'graphology'; //
 
 import louvain from 'graphology-communities-louvain';
 
+// ▼▼▼【修正】commonArtists/Genres の型を string[] に変更 ▼▼▼
 interface SimilarityData {
   userA: string;
   userB: string;
   artistSim: number;
   genreSim: number;
   combinedSim: number;
-  commonArtists: string;
-  commonGenres: string;
+  commonArtists: string[]; // 👈 string になっていたのを string[] に変更
+  commonGenres: string[];  // 👈 string になっていたのを string[] に変更
 }
 
 // ... (中略: calculateJaccard, DbUserArtist, UserDataMap) ...
@@ -102,7 +103,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // ... (中略: 類似度計算ロジック allSimilarities.push まで) ...
-    const allSimilarities: SimilarityData[] = [];
+    const allSimilarities: SimilarityData[] = []; // 👈 型が更新されている
     for (let i = 0; i < userIds.length; i++) {
       for (let j = i + 1; j < userIds.length; j++) {
         const userA_id = userIds[i];
@@ -124,8 +125,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           artistSim,
           genreSim,
           combinedSim,
-          commonArtists: JSON.stringify(Array.from(commonArtists)),
-          commonGenres: JSON.stringify(Array.from(commonGenres)),
+          commonArtists: Array.from(commonArtists), // 👈 JSON.stringify を削除
+          commonGenres: Array.from(commonGenres),   // 👈 JSON.stringify を削除
         });
       }
     }
@@ -135,12 +136,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // ... (中略: 類似度保存ロジック simInsertQuery まで) ...
     if (allSimilarities.length > 0) {
-      const simValues: (string | number | null)[] = [];
+      // ▼▼▼【修正】simValues の型を (string | number | null | string[])[] に変更 ▼▼▼
+      const simValues: (string | number | null | string[])[] = []; 
       const simQueryRows = allSimilarities.map((sim, index) => {
         const i = index * 7;
         simValues.push(
           sim.userA, sim.userB, sim.artistSim, sim.genreSim, 
-          sim.combinedSim, sim.commonArtists, sim.commonGenres
+          sim.combinedSim, 
+          sim.commonArtists, // 👈 ここは配列のまま渡す
+          sim.commonGenres   // 👈 ここは配列のまま渡す
         );
         return `($${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, $${i + 7})`;
       });
@@ -148,6 +152,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         INSERT INTO similarities (user_a_id, user_b_id, artist_similarity, genre_similarity, combined_similarity, common_artists, common_genres)
         VALUES ${simQueryRows.join(', ')}
       `;
+      // ▲▲▲ 修正ここまで ▲▲▲
       await client.query(simInsertQuery, simValues);
     }
     console.log(`[Batch] Step 3: Saved similarities to DB.`);

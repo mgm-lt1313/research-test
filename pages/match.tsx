@@ -13,8 +13,7 @@ interface UserProfile {
 }
 
 // ▼ MatchResult の型を API レスポンスに合わせて更新
-interface MatchResult {
-  other_user_id: string; // uuid
+interface MatchResult {other_user_id: string; // uuid
   nickname: string;
   profile_image_url: string | null;
   bio: string | null;
@@ -23,12 +22,14 @@ interface MatchResult {
   combined_similarity: number;
   match_score: number;
   is_same_community: boolean;
-  common_artists: string; // JSON文字列
-  common_genres: string; // JSON文字列
-  // ▼▼▼ 【追加】 API(get-recommendations)からの返り値に合わせる
+  
+  // ▼▼▼【修正】'string' から 'string[]' に変更 ▼▼▼
+  common_artists: string[]; // JSON文字列 
+  common_genres: string[]; // JSON文字列
+  // ▲▲▲ 修正ここまで ▲▲▲
+
   follow_status: 'pending' | 'approved' | null;
   i_am_follower: boolean;
-  // ▲▲▲ 【追加】 ▲▲▲
 }
 
 // --- (ProfileEditorProps, ProfileEditor コンポーネントは変更なし) ---
@@ -375,8 +376,10 @@ export default function Match() {
           <ul className="space-y-4 mb-8">
             {matches.map((match) => {
               const isFollowing = followingInProgress.has(match.other_user_id);
-              const commonArtists: string[] = JSON.parse(match.common_artists || '[]');
-              const commonGenres: string[] = JSON.parse(match.common_genres || '[]');
+              // ▼▼▼【修正】JSON.parse を削除 ▼▼▼
+              const commonArtists: string[] = match.common_artists || [];
+              const commonGenres: string[] = match.common_genres || [];
+              // ▲▲▲ 修正ここまで ▲▲▲
 
               // ▼▼▼ フォローボタンの状態を動的に決定 ▼▼▼
               let followButton: React.ReactNode;
