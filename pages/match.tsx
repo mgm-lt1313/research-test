@@ -273,9 +273,9 @@ export default function Match() {
         setMatches(matchRes.data.matches as MatchResult[]);
         console.log(`Fetched ${matchRes.data.matches.length} matches.`);
 
-        if (wasNewUser && matchRes.data.matches.length === 0) {
-            alert('おすすめユーザーのマッチング計算を開始しました。計算が完了するまで、しばらくお待ちください。\n（数分後にページを再読み込みしてください）');
-        }
+        // if (wasNewUser && matchRes.data.matches.length === 0) {
+        //     alert('おすすめユーザーのマッチング計算を開始しました。計算が完了するまで、しばらくお待ちください。\n（数分後にページを再読み込みしてください）');
+        // }
 
       } catch (matchError) {
          console.error('Failed to fetch recommendations after save:', matchError);

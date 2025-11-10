@@ -143,8 +143,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         simValues.push(
           sim.userA, sim.userB, sim.artistSim, sim.genreSim, 
           sim.combinedSim, 
-          sim.commonArtists, // 👈 ここは配列のまま渡す
-          sim.commonGenres   // 👈 ここは配列のまま渡す
+          JSON.stringify(sim.commonArtists), // 👈 JSON文字列に変換
+          JSON.stringify(sim.commonGenres)   // 👈 JSON文字列に変換
         );
         return `($${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, $${i + 7})`;
       });

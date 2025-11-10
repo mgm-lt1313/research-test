@@ -1,7 +1,147 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import pool from '../../../lib/db'; //
-import { getMyFollowingArtists, SpotifyArtist } from '../../../lib/spotify'; //
-import { PoolClient } from 'pg'; // 👈 修正: '@vercel/postgres' から 'pg' に変更
+import pool from '../../../lib/db';
+import { getMyFollowingArtists, SpotifyArtist } from '../../../lib/spotify';
+import { PoolClient } from 'pg';
+
+// ▼▼▼ calculate-graph.ts から型定義をコピー ▼▼▼
+interface SimilarityData {
+  userA: string;
+  userB: string;
+  artistSim: number;
+  genreSim: number;
+  combinedSim: number;
+  commonArtists: string[];
+  commonGenres: string[];
+}
+interface DbUserArtist {
+  user_id: string; // uuid
+  artist_id: string;
+  genres: string; // DBからはJSON文字列として取得
+}
+type UserDataMap = Map<string, {
+  artists: Set<string>;
+  genres: Set<string>;
+}>;
+// ▲▲▲ 型定義ここまで ▲▲▲
+
+// ▼▼▼ calculate-graph.ts からヘルパー関数をコピー ▼▼▼
+function calculateJaccard(setA: Set<string>, setB: Set<string>): { similarity: number, intersection: Set<string> } {
+  const intersection = new Set<string>([...setA].filter(x => setB.has(x)));
+  const union = new Set<string>([...setA, ...setB]);
+  if (union.size === 0) return { similarity: 0, intersection };
+  return { similarity: intersection.size / union.size, intersection };
+}
+
+async function getAllArtistData(client: PoolClient): Promise<UserDataMap> {
+  const res = await client.query<DbUserArtist>(
+    'SELECT user_id, artist_id, genres::TEXT FROM user_artists'
+  );
+  const userMap: UserDataMap = new Map();
+  for (const row of res.rows) {
+    if (!userMap.has(row.user_id)) {
+      userMap.set(row.user_id, {
+        artists: new Set<string>(),
+        genres: new Set<string>(),
+      });
+    }
+    const userData = userMap.get(row.user_id)!;
+    userData.artists.add(row.artist_id);
+    try {
+      const genres: string[] = JSON.parse(row.genres || '[]');
+      for (const genre of genres) {
+        userData.genres.add(genre.toLowerCase().trim());
+      }
+    } catch (e) { 
+      // console.warn(`Could not parse genres for user ${row.user_id}`);
+    }
+  }
+  return userMap;
+}
+// ▲▲▲ ヘルパー関数ここまで ▲▲▲
+
+// ▼▼▼【新設】即時類似度計算 (O(n)) の関数 ▼▼▼
+/**
+ * 新規ユーザーと全既存ユーザー間の類似度を計算し、DBに挿入する (O(n))
+ */
+async function calculateNewUserSimilarities(client: PoolClient, newUserId: string) {
+  console.log(`[API profile/save] Starting O(n) similarity calculation for user ${newUserId}`);
+  
+  // 1. 全ユーザーのアーティスト・ジャンルデータを取得
+  const userDataMap = await getAllArtistData(client);
+
+  const newUser = userDataMap.get(newUserId);
+  if (!newUser) {
+    console.warn(`[API profile/save] New user ${newUserId} has no artist data. Skipping O(n) calculation.`);
+    return;
+  }
+
+  const otherUserIds = Array.from(userDataMap.keys()).filter(id => id !== newUserId);
+  if (otherUserIds.length === 0) {
+    console.log(`[API profile/save] No other users to compare. Skipping O(n) calculation.`);
+    return;
+  }
+
+  const similarities: SimilarityData[] = [];
+
+  // 2. 新規ユーザー vs 既存ユーザー (O(n))
+  for (const otherId of otherUserIds) {
+    const otherUser = userDataMap.get(otherId)!;
+
+    const { similarity: artistSim, intersection: commonArtists } = calculateJaccard(newUser.artists, otherUser.artists);
+    const { similarity: genreSim, intersection: commonGenres } = calculateJaccard(newUser.genres, otherUser.genres);
+
+    const w1 = 0.6; // アーティスト重み
+    const w2 = 0.4; // ジャンル重み
+    const combinedSim = (artistSim * w1) + (genreSim * w2);
+
+    similarities.push({
+      userA: newUserId,
+      userB: otherId,
+      artistSim,
+      genreSim,
+      combinedSim,
+      commonArtists: Array.from(commonArtists),
+      commonGenres: Array.from(commonGenres),
+    });
+  }
+  console.log(`[API profile/save] Calculated ${similarities.length} new similarity pairs.`);
+
+  // 3. DBに挿入 (TRUNCATE しない)
+  if (similarities.length > 0) {
+    const simValues: (string | number | null)[] = []; // 👈 型を (string | number | null)[] に変更
+    const simQueryRows = similarities.map((sim, index) => {
+      const i = index * 7;
+      simValues.push(
+        sim.userA, sim.userB, sim.artistSim, sim.genreSim,
+        sim.combinedSim,
+        JSON.stringify(sim.commonArtists), // 👈 ★ JSONエラー修正
+        JSON.stringify(sim.commonGenres)   // 👈 ★ JSONエラー修正
+      );
+      return `($${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, $${i + 7})`;
+    });
+    
+    // 既に存在するペアは更新 (ON CONFLICT DO UPDATE)
+    // ( user_b_id, user_a_id ) のペアも考慮
+    const simInsertQuery = `
+      INSERT INTO similarities (
+        user_a_id, user_b_id, artist_similarity, genre_similarity, 
+        combined_similarity, common_artists, common_genres
+      )
+      VALUES ${simQueryRows.join(', ')}
+      ON CONFLICT (user_a_id, user_b_id) DO UPDATE SET
+        artist_similarity = EXCLUDED.artist_similarity,
+        genre_similarity = EXCLUDED.genre_similarity,
+        combined_similarity = EXCLUDED.combined_similarity,
+        common_artists = EXCLUDED.common_artists,
+        common_genres = EXCLUDED.common_genres,
+        calculated_at = CURRENT_TIMESTAMP
+    `;
+    
+    await client.query(simInsertQuery, simValues);
+    console.log(`[API profile/save] Inserted/Updated ${similarities.length} new pairs into DB.`);
+  }
+}
+// ▲▲▲【新設】ここまで ▲▲▲
 
 /**
  * ユーザーの全フォローアーティストをDBに保存（または更新）する
