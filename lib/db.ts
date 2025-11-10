@@ -1,13 +1,15 @@
 import { createPool } from '@vercel/postgres';
 
-// DATABASE_URL 環境変数が設定されているか確認
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is not set');
+// 
+// POSTGRES_URL (Vercelが自動で設定するプール用URL) が設定されているか確認
+if (!process.env.POSTGRES_URL) {
+  throw new Error('POSTGRES_URL is not set');
 }
 
 // pg の Pool の代わりに @vercel/postgres の createPool を使用
 const pool = createPool({
-  connectionString: process.env.DATABASE_URL,
+  // 
+  connectionString: process.env.POSTGRES_URL,
   // SSL設定などは @vercel/postgres が環境変数から自動で判断します
 });
 
