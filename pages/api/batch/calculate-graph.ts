@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db'; //
-import { PoolClient } from 'pg';
+import { VercelPoolClient } from '@vercel/postgres'; // 👈 修正: 'pg' から '@vercel/postgres' に変更
 import Graph from 'graphology'; //
 // ▼▼▼ 修正 1: @ts-expect-error に理由（3文字以上）を追加 ▼▼▼
 // @ts-expect-error: graphology-communities-louvain lacks official TS types
@@ -48,7 +48,7 @@ type UserDataMap = Map<string, {
 /**
  * DBから全ユーザーのアーティストとジャンルのセットを取得
  */
-async function getAllArtistData(client: PoolClient): Promise<UserDataMap> {
+async function getAllArtistData(client: VercelPoolClient): Promise<UserDataMap> { // 👈 修正: PoolClient を VercelPoolClient に変更
   const res = await client.query<DbUserArtist>(
     'SELECT user_id, artist_id, genres::TEXT FROM user_artists'
   );

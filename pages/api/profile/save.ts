@@ -1,14 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db'; //
 import { getMyFollowingArtists, SpotifyArtist } from '../../../lib/spotify'; //
-import { PoolClient } from 'pg';
+import { VercelPoolClient } from '@vercel/postgres'; // 👈 修正: 'pg' から '@vercel/postgres' に変更
 
 /**
  * ユーザーの全フォローアーティストをDBに保存（または更新）する
  * (研究計画 2.1)
  */
 async function saveAllFollowingArtists(
-  client: PoolClient, 
+  client: VercelPoolClient, // 👈 修正: PoolClient を VercelPoolClient に変更
   userId: string, // DBの内部UUID
   accessToken: string
 ) {
