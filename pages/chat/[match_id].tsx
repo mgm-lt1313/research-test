@@ -210,6 +210,14 @@ export default function ChatRoom() {
                                 : 'bg-blue-600' // 自分のメッセージ
                         }`}>
                             <p>{msg.content}</p>
+                            {/* ▼▼▼ タイムスタンプ表示を追加 ▼▼▼ */}
+                            <p className={`text-xs mt-1 ${
+                                msg.sender_id === otherUserId ? 'text-gray-400' : 'text-blue-200'
+                            }`}>
+                                {new Date(msg.created_at).toLocaleString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            {/* ▲▲▲ 追加ここまで ▲▲▲ */}
+                            
                         </div>
                     </div>
                 ))}
