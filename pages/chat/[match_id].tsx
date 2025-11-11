@@ -164,17 +164,35 @@ export default function ChatRoom() {
     // (JSX の return 部分は変更なし)
     return (
         <div className="flex flex-col h-screen max-w-lg mx-auto bg-gray-900 text-white">
-            {/* ヘッダー */}
-            <header className="bg-gray-800 p-4 shadow-md flex items-center space-x-3 sticky top-0 z-10">
-                <Link href={`/chats?spotifyUserId=${selfSpotifyId}`} className="text-blue-400 hover:text-blue-300">
-                    &lt; 戻る
+            {/* ヘッダー (修正) */}
+            <header className="bg-gray-800 p-4 shadow-md flex items-center justify-between sticky top-0 z-10">
+                <div className="flex items-center space-x-3">
+                    {/* 戻るボタンのリンク先を /chats に修正 */}
+                    <Link href={`/chats?spotifyUserId=${selfSpotifyId}`} className="text-blue-400 hover:text-blue-300">
+                        &lt; 戻る
+                    </Link>
+                    {otherUserInfo?.profile_image_url ? (
+                         <Image src={otherUserInfo.profile_image_url} alt={otherUserInfo.nickname} width={40} height={40} className="w-10 h-10 rounded-full object-cover" />
+                    ) : (
+                         <div className="w-10 h-10 rounded-full bg-gray-600"></div>
+                    )}
+                    <h1 className="font-bold text-lg">{otherUserInfo?.nickname || '読み込み中...'}</h1>
+                </div>
+                
+                {/* ▼▼▼ ユーザー詳細への「...」リンクを追加 ▼▼▼ */}
+                <Link 
+                  href={{
+                      pathname: `/user/${otherUserId}`,
+                      query: { selfSpotifyId: selfSpotifyId }
+                  }}
+                  className="text-gray-400 hover:text-white p-2"
+                  title="ユーザー詳細を見る"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                  </svg>
                 </Link>
-                {otherUserInfo?.profile_image_url ? (
-                     <Image src={otherUserInfo.profile_image_url} alt={otherUserInfo.nickname} width={40} height={40} className="w-10 h-10 rounded-full object-cover" />
-                ) : (
-                     <div className="w-10 h-10 rounded-full bg-gray-600"></div>
-                )}
-                <h1 className="font-bold text-lg">{otherUserInfo?.nickname || '読み込み中...'}</h1>
+                {/* ▲▲▲ 修正ここまで ▲▲▲ */}
             </header>
 
             {/* メッセージリスト */}

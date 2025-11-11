@@ -40,7 +40,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 取得したトークンを /match ページにクエリパラメータとして渡してリダイレクト
     // 本来はHTTP Only Cookieなどで安全に渡すべきですが、簡便のためクエリパラメータで
-    res.redirect(`/match?access_token=${access_token}&refresh_token=${refresh_token}`);
+    // ▼▼▼ 修正 ▼▼▼
+    // リダイレクト先を /match から /profile に変更
+    res.redirect(`/profile?access_token=${access_token}&refresh_token=${refresh_token}`);
+    // ▲▲▲ 修正ここまで ▲▲▲
+    
   } catch (error) {
     console.error('Error getting tokens:', error);
     // エラー時はトップページにリダイレクトし、エラー情報を渡す

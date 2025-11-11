@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>卒業研究 ネットワーク可視化</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+    }
+    #cy {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    h1 {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      font-size: 1.2em;
+      background: rgba(255,255,255,0.8);
+      padding: 10px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>ネットワーク可視化 (Cytoscape.js)</h1>
+  <div id="cy"></div>
+
+  <script>
+    // 3. graph.json を非同期で読み込む
+    fetch('graph.json')
+      .then(response => response.json())
+      .then(graphData => {
+        
+        // 4. Cytoscape.js が要求する形式にデータを変換
+        const elements = [];
+
+        // ノードデータを変換
+        graphData.nodes.forEach(node => {
+          elements.push({
+            group: 'nodes',
+            data: {
+              id: node.id,
+              label: node.label,
+              community: node.community
+            }
+          });
+        });
+
+        // エッジデータを変換
+        graphData.edges.forEach(edge => {
+          elements.push({
+            group: 'edges',
+            data: {
+              id: `e_${edge.source}_${edge.target}`,
+              source: edge.source,
+              target: edge.target,
+              weight: edge.weight
+            }
+          });
+        });
+
+        // 5. Cytoscape.js の初期化
+        const cy = cytoscape({
+          container: document.getElementById('cy'),
+          elements: elements,
+
+          // 6. スタイル（見た目）の定義
+          style: [
+            {
+              selector: 'node',
+              style: {
+                'background-color': '#666', // デフォルトの色
+                'label': 'data(label)', // ラベルにニックネームを指定
+                'font-size': '10px',
+                'color': '#fff',
+                'text-outline-width': 2,
+                'text-outline-color': '#888'
+              }
+            },
+            {
+              selector: 'edge',
+              style: {
+                'width': 'mapData(weight, 0.2, 1, 1, 10)', // weight(0.2〜1)を幅(1〜10)に変換
+                'line-color': '#ccc',
+                'curve-style': 'bezier',
+                'opacity': 0.7
+              }
+            },
+            
+            // --- コミュニティごとの色分け ---
+            // 必要に応じて色を追加・変更してください
+            {
+              selector: 'node[community = 0]',
+              style: { 'background-color': '#e6194B' } // 赤
+            },
+            {
+              selector: 'node[community = 1]',
+              style: { 'background-color': '#3cb44b' } // 緑
+            },
+            {
+              selector: 'node[community = 2]',
+              style: { 'background-color': '#ffe119' } // 黄
+            },
+            {
+              selector: 'node[community = 3]',
+              style: { 'background-color': '#4363d8' } // 青
+            },
+            {
+              selector: 'node[community = 4]',
+              style: { 'background-color': '#f58231' } // オレンジ
+            },
+            {
+              selector: 'node[community = 5]',
+              style: { 'background-color': '#911eb4' } // 紫
+            },
+            // ... コミュニティがさらに多い場合はここに追加 ...
+          ],
+
+          // 7. レイアウト（配置）の指定
+          layout: {
+            name: 'cose', // ノードが重ならないように配置するアルゴリズム
+            animate: true,
+            padding: 30
+          }
+        });
+      })
+      .catch(err => {
+        console.error('グラフデータの読み込みに失敗しました:', err);
+        document.body.innerHTML = `<h1>Error: graph.json の読み込みに失敗しました。</h1><p>${err}</p>`;
+      });
+  </script>
+</body>
+</html>

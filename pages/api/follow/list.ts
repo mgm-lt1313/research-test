@@ -1,95 +1,93 @@
 // pages/api/follow/list.ts
+// (※ 既存の `pages/api/follow/list.ts` を以下の内容で置き換え)
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-// ▼▼▼ 修正: 'PoolClient' のインポートを削除 ▼▼▼
-// import { PoolClient } from 'pg';
 
-// (pool.query を直接使う)
 async function getUserIdBySpotifyId(spotifyUserId: string): Promise<string | null> {
     const res = await pool.query('SELECT id FROM users WHERE spotify_user_id = $1', [spotifyUserId]);
     return res.rows.length > 0 ? res.rows[0].id : null;
 }
 
-// --- 🔽 型定義を追加 ---
-// マッチ済みユーザー情報の型 (フロントエンド chats.tsx と合わせる)
-interface MatchProfile {
-    id: string; // users.id (uuid)
-    nickname: string;
-    profile_image_url: string | null;
+// ユーザー情報を取得する共通関数
+async function getUserProfiles(userIds: string[]) {
+    if (userIds.length === 0) return new Map();
+    const usersRes = await pool.query(
+        'SELECT id, nickname, profile_image_url FROM users WHERE id = ANY($1::uuid[])',
+        [userIds]
+    );
+    return new Map<string, { nickname: string, profile_image_url: string | null }>(
+        usersRes.rows.map(u => [u.id, { nickname: u.nickname, profile_image_url: u.profile_image_url }])
+    );
 }
-interface ApprovedMatchResult {
-  match_id: number; // follows.id (bigint) - チャットルームID
-  other_user: MatchProfile | undefined; // 相手のプロフィール (Mapに存在しない場合 undefined)
-}
-// --- 🔼 型定義を追加 ---
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'GET') return res.status(405).end();
-
     const { spotifyUserId } = req.query;
     if (!spotifyUserId || typeof spotifyUserId !== 'string') {
-        return res.status(400).json({ message: 'Missing spotifyUserId query parameter.' });
+        return res.status(400).json({ message: 'Missing spotifyUserId.' });
     }
 
     try {
-        // ▼▼▼ 修正: pool.connect() を使わない ▼▼▼
         const selfId = await getUserIdBySpotifyId(spotifyUserId);
         if (!selfId) return res.status(404).json({ message: 'User not found.' });
 
-        // 1. 自分宛の承認待ちリクエスト (変更なし)
-        const pendingRequests = await pool.query(
-            `SELECT
-                f.id as follow_id, u.id as user_id, u.nickname, u.profile_image_url
-             FROM follows f
-             JOIN users u ON f.follower_id = u.id
-             WHERE f.following_id = $1 AND f.status = 'pending'`,
+        // 1. フォロワー一覧 (自分宛の pending リクエスト) [cite: 69]
+        const followersRes = await pool.query(
+            `SELECT id, follower_id as user_id FROM follows
+             WHERE following_id = $1 AND status = 'pending'`,
             [selfId]
         );
 
-        // 2. 成立済みのマッチング (変更なし)
-        const approvedMatches = await pool.query(
-            `SELECT
-                f.id as match_id,
-                CASE
-                    WHEN f.follower_id = $1 THEN f.following_id
-                    ELSE f.follower_id
-                END as other_user_id
-             FROM follows f
-             WHERE (f.follower_id = $1 OR f.following_id = $1)
-               AND f.status = 'approved'`,
+        // 2. 承認待ち (自分発の pending リクエスト) [cite: 67]
+        const pendingRes = await pool.query(
+            `SELECT id, following_id as user_id FROM follows
+             WHERE follower_id = $1 AND status = 'pending'`,
             [selfId]
         );
 
-        const otherUserIds = approvedMatches.rows.map(r => r.other_user_id);
+        // 3. フォロー一覧 (approved) [cite: 64]
+        const matchesRes = await pool.query(
+            `SELECT id, CASE WHEN follower_id = $1 THEN following_id ELSE follower_id END as user_id
+             FROM follows
+             WHERE (follower_id = $1 OR following_id = $1) AND status = 'approved'`,
+            [selfId]
+        );
 
-        let matchesWithProfiles: ApprovedMatchResult[] = [];
+        // 必要な全ユーザーIDを収集
+        const allUserIds = [
+            ...followersRes.rows.map(r => r.user_id),
+            ...pendingRes.rows.map(r => r.user_id),
+            ...matchesRes.rows.map(r => r.user_id)
+        ];
+        const userProfileMap = await getUserProfiles(allUserIds);
 
-        if (otherUserIds.length > 0) {
-            const usersRes = await pool.query(
-                'SELECT id, nickname, profile_image_url FROM users WHERE id = ANY($1::uuid[])',
-                [otherUserIds]
-            );
-            
-            const userProfileMap = new Map<string, MatchProfile>(
-                usersRes.rows.map(u => [u.id, { id: u.id, nickname: u.nickname, profile_image_url: u.profile_image_url }])
-            );
+        // データを整形
+        const pendingRequestsToMe = followersRes.rows.map(r => ({
+            id: r.id,
+            user_id: r.user_id,
+            ...userProfileMap.get(r.user_id)
+        })).filter(r => r.nickname); // プロフ未取得は除外
 
-            matchesWithProfiles = approvedMatches.rows.map(match => ({
-                match_id: match.match_id,
-                other_user: userProfileMap.get(match.other_user_id) // getは undefined を返す可能性がある
-            }));
-        }
+        const pendingRequestsFromMe = pendingRes.rows.map(r => ({
+            id: r.id,
+            user_id: r.user_id,
+            ...userProfileMap.get(r.user_id)
+        })).filter(r => r.nickname);
+
+        const approvedMatches = matchesRes.rows.map(r => ({
+            id: r.id, // match_id (チャットルームID)
+            user_id: r.user_id,
+            ...userProfileMap.get(r.user_id)
+        })).filter(r => r.nickname);
 
         res.status(200).json({
-            pendingRequests: pendingRequests.rows,
-            approvedMatches: matchesWithProfiles // 型付けされた配列を返す
+            pendingRequestsToMe,
+            pendingRequestsFromMe,
+            approvedMatches
         });
-        // ▲▲▲ 修正ここまで ▲▲▲
 
     } catch (dbError: unknown) {
-        console.error('Failed to list follows/matches:', dbError);
-        const message = dbError instanceof Error ? dbError.message : 'Unknown database error';
-        res.status(500).json({ message: `Database error while fetching lists: ${message}` });
+        console.error('Failed to list follows:', dbError);
+        res.status(500).json({ message: 'Database error while fetching lists.' });
     }
-    // finally { client.release() } は不要
 }
