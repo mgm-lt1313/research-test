@@ -1,2 +1,4 @@
-/* styles/globals.css (v4 の記法) */
-@import "tailwindcss";
+/* styles/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
