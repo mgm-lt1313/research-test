@@ -32,20 +32,27 @@ export default function Matches() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!spotifyUserId) {
-      if (router.isReady) { // ページが完全に読み込まれてから
+    // ▼▼▼ 修正: router.isReady を待たずに localStorage から取得試行 ▼▼▼
+    let id = spotifyUserId;
+    if (!id && typeof window !== 'undefined') {
+      id = localStorage.getItem('spotify_user_id') || undefined;
+    }
+    
+    if (!id) {
+      if (router.isReady) { // router.isReadyはフォールバックとして残す
         setError('ユーザー情報がありません。プロフィールページに戻ってください。');
         setLoading(false);
       }
       return;
     }
+    // ▲▲▲ 修正ここまで ▲▲▲
 
     const fetchMatches = async () => {
       setLoading(true);
       setError(null);
       try {
         const matchRes = await axios.post('/api/match/get-recommendations', { 
-            spotifyUserId: spotifyUserId
+            spotifyUserId: id // 👈 修正: 取得したid変数を使う
         });
         setMatches(matchRes.data.matches as MatchResult[]);
       } catch (e: unknown) {
@@ -56,7 +63,7 @@ export default function Matches() {
       }
     };
     fetchMatches();
-  }, [spotifyUserId, router.isReady]);
+  }, [spotifyUserId, router.isReady]); // 依存配列は変更しない
 
 
   if (loading) return <div className="p-4 text-center">マッチング相手を検索中...</div>;
@@ -81,9 +88,9 @@ export default function Matches() {
               <Link 
                 href={{ 
                   pathname: `/user/${match.other_user_id}`,
-                  query: { selfSpotifyId: spotifyUserId } 
+                  query: { selfSpotifyId: spotifyUserId || localStorage.getItem('spotify_user_id') } // 👈 修正: selfSpotifyIdも渡す
                 }}
-                className="flex space-x-4" // 👈 items-center を削除
+                className="flex space-x-4"
               >
                 {/* アイコン */}
                 {match.profile_image_url ? (
@@ -92,10 +99,13 @@ export default function Matches() {
                   <div className="w-14 h-14 rounded-full bg-gray-600 flex-shrink-0"></div>
                 )}
                 
-                {/* ユーザー情報 (min-w-0 を削除) */}
-                <div className="flex-grow">
+                <div className="flex-grow min-w-0">
                   <h3 className="text-lg font-bold truncate">{match.nickname}</h3>
                   
+                  {/* ▼▼▼ 修正: 自己紹介文(bio)を追加 ▼▼▼ */}
+                  <p className="text-sm text-gray-300 mt-1 truncate">{match.bio || '(自己紹介なし)'}</p>
+                  {/* ▲▲▲ 修正ここまで ▲▲▲ */}
+
                   {/* マッチ率 */}
                   <div className="text-sm mt-1">
                       <span className="font-bold text-green-400">マッチ率: {Math.round(match.combined_similarity * 100)}%</span>
@@ -104,7 +114,7 @@ export default function Matches() {
                       </span>
                   </div>
 
-                  {/* ▼▼▼ UI改善: 共通点を表示 ▼▼▼ */}
+                  {/* 共通点 */}
                   {match.common_artists && match.common_artists.length > 0 ? (
                     <div className="text-xs text-gray-300 mt-2">
                       <span className="font-semibold">共通アーティスト:</span>
@@ -120,8 +130,6 @@ export default function Matches() {
                       (詳細を見る)
                     </div>
                   )}
-                  {/* ▲▲▲ UI改善ここまで ▲▲▲ */}
-
                 </div>
               </Link>
             </li>

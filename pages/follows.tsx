@@ -21,11 +21,22 @@ interface MatchUser {
 
 export default function Follows() {
   const router = useRouter();
-  const { spotifyUserId } = router.query as { spotifyUserId?: string };
+  // ▼▼▼ 修正: LocalStorage からのフォールバックを追加 ▼▼▼
+  const [spotifyUserId, setSpotifyUserId] = useState<string | undefined>(router.query.spotifyUserId as string | undefined);
+  
+  useEffect(() => {
+    if (router.isReady && !spotifyUserId) {
+        const storedId = localStorage.getItem('spotify_user_id');
+        if (storedId) {
+            setSpotifyUserId(storedId);
+        }
+    }
+  }, [router.isReady, spotifyUserId]);
+  // ▲▲▲ 修正ここまで ▲▲▲
 
-  const [followers, setFollowers] = useState<FollowUser[]>([]); // フォロワー一覧 [cite: 69]
-  const [pending, setPending] = useState<FollowUser[]>([]);     // 承認待ち [cite: 67]
-  const [matches, setMatches] = useState<MatchUser[]>([]);       // フォロー一覧 (マッチ済み) [cite: 64]
+  const [followers, setFollowers] = useState<FollowUser[]>([]); 
+  const [pending, setPending] = useState<FollowUser[]>([]);     
+  const [matches, setMatches] = useState<MatchUser[]>([]);       
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,18 +44,18 @@ export default function Follows() {
 
   useEffect(() => {
     if (!spotifyUserId) {
-        if (router.isReady) {
+        if (router.isReady) { // router.isReady かつ spotifyUserId が未定義の場合のみエラー
             setError('ユーザー情報がありません。');
             setLoading(false);
         }
         return;
     }
+    // ▲▲▲ 修正ここまで ▲▲▲
 
     const fetchLists = async () => {
       setLoading(true);
       setError(null);
       try {
-        // 3つのリストを取得するAPIを呼び出す
         const res = await axios.get(`/api/follow/list?spotifyUserId=${spotifyUserId}`);
         setFollowers(res.data.pendingRequestsToMe || []);
         setPending(res.data.pendingRequestsFromMe || []);
@@ -57,9 +68,8 @@ export default function Follows() {
       }
     };
     fetchLists();
-  }, [spotifyUserId, router.isReady]);
+  }, [spotifyUserId, router.isReady]); // 👈 spotifyUserId が変更されたら再実行
 
-  // 承認ボタンの処理 (変更なし)
   const handleAccept = async (followId: number) => {
     if (!spotifyUserId || acceptingId) return;
     setAcceptingId(followId);
@@ -68,7 +78,6 @@ export default function Follows() {
         selfSpotifyId: spotifyUserId,
         followId: followId,
       });
-      // 成功したらリストを再取得
       router.reload();
     } catch (e: unknown) {
       console.error("Failed to accept follow request:", e);
@@ -80,7 +89,6 @@ export default function Follows() {
   if (loading) return <div className="p-4 text-center">読み込み中...</div>;
   if (error) return <div className="p-4 text-center text-red-500">{error}</div>;
   
-  // ユーザー詳細ページへのリンクを作成
   const userDetailLink = (userId: string) => ({
       pathname: `/user/${userId}`,
       query: { selfSpotifyId: spotifyUserId }
@@ -90,7 +98,7 @@ export default function Follows() {
     <div className="p-4 max-w-lg mx-auto text-white">
       <h1 className="text-3xl font-bold mb-6">フォロー</h1>
 
-      {/* --- フォロワー一覧 (承認待ち) --- [cite: 69] */}
+      {/* --- フォロワー一覧 (承認待ち) --- */}
       <section className="mb-8">
         <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">フォロワー一覧 (あなたをフォロー中)</h2>
         {followers.length > 0 ? (
@@ -103,7 +111,8 @@ export default function Follows() {
                   ): (
                     <div className="w-10 h-10 rounded-full bg-gray-600 flex-shrink-0"></div>
                   )}
-                  <span className="font-medium truncate">{req.nickname} [cite: 70]</span>
+                  {/* ▼▼▼ 修正: [cite] 削除 ▼▼▼ */}
+                  <span className="font-medium truncate">{req.nickname}</span>
                 </Link>
                 <button
                   onClick={() => handleAccept(req.id)}
@@ -124,7 +133,7 @@ export default function Follows() {
         )}
       </section>
       
-      {/* --- 承認待ち --- [cite: 67] */}
+      {/* --- 承認待ち --- */}
       <section className="mb-8">
         <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">承認待ち (あなたがフォロー中)</h2>
         {pending.length > 0 ? (
@@ -137,7 +146,8 @@ export default function Follows() {
                   ): (
                     <div className="w-10 h-10 rounded-full bg-gray-600 flex-shrink-0"></div>
                   )}
-                  <span className="font-medium truncate">{req.nickname} [cite: 68]</span>
+                  {/* ▼▼▼ 修正: [cite] 削除 ▼▼▼ */}
+                  <span className="font-medium truncate">{req.nickname}</span>
                 </Link>
                 <span className="text-sm text-gray-400 flex-shrink-0">承認待ち</span>
               </li>
@@ -148,7 +158,7 @@ export default function Follows() {
         )}
       </section>
 
-      {/* --- フォロー一覧 (マッチ済み) --- [cite: 64] */}
+      {/* --- フォロー一覧 (マッチ済み) --- */}
       <section>
         <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">フォロー一覧 (マッチング済み)</h2>
         {matches.length > 0 ? (
@@ -162,7 +172,8 @@ export default function Follows() {
                      <div className="w-12 h-12 rounded-full bg-gray-600 flex-shrink-0"></div>
                   )}
                   <div className="overflow-hidden">
-                    <h3 className="font-bold text-lg truncate">{match.nickname} [cite: 65, 66]</h3>
+                    {/* ▼▼▼ 修正: [cite] 削除 ▼▼▼ */}
+                    <h3 className="font-bold text-lg truncate">{match.nickname}</h3>
                   </div>
                 </Link>
               </li>

@@ -17,7 +17,18 @@ interface ApprovedMatch {
 
 export default function Chats() {
   const router = useRouter();
-  const { spotifyUserId } = router.query as { spotifyUserId?: string };
+  // ▼▼▼ 修正: LocalStorage からのフォールバックを追加 ▼▼▼
+  const [spotifyUserId, setSpotifyUserId] = useState<string | undefined>(router.query.spotifyUserId as string | undefined);
+  
+  useEffect(() => {
+    if (router.isReady && !spotifyUserId) {
+        const storedId = localStorage.getItem('spotify_user_id');
+        if (storedId) {
+            setSpotifyUserId(storedId);
+        }
+    }
+  }, [router.isReady, spotifyUserId]);
+  // ▲▲▲ 修正ここまで ▲▲▲
 
   const [matches, setMatches] = useState<ApprovedMatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,12 +42,12 @@ export default function Chats() {
         }
         return;
     }
+    // ▲▲▲ 修正ここまで ▲▲▲
 
     const fetchMatches = async () => {
       setLoading(true);
       setError(null);
       try {
-        // マッチ済みのユーザーのみを取得する新しいAPIを呼び出す
         const res = await axios.get(`/api/chat/list?spotifyUserId=${spotifyUserId}`);
         setMatches(res.data.approvedMatches || []);
       } catch (e: unknown) {
@@ -47,14 +58,15 @@ export default function Chats() {
       }
     };
     fetchMatches();
-  }, [spotifyUserId, router.isReady]);
+  }, [spotifyUserId, router.isReady]); // 👈 spotifyUserId が変更されたら再実行
 
   if (loading) return <div className="p-4 text-center">読み込み中...</div>;
   if (error) return <div className="p-4 text-center text-red-500">{error}</div>;
 
   return (
     <div className="p-4 max-w-lg mx-auto text-white">
-      <h1 className="text-3xl font-bold mb-6">チャット</h1> [cite: 77]
+      {/* ▼▼▼ 修正: [cite] 削除 ▼▼▼ */}
+      <h1 className="text-3xl font-bold mb-6">チャット</h1>
 
       {/* --- マッチ一覧 (チャットルームへのリンク) --- */}
       <section>
@@ -62,7 +74,7 @@ export default function Chats() {
           <ul className="space-y-3">
             {matches.map(match => (
               <li key={match.match_id}>
-                {/* チャットルームへのリンク [cite: 78, 81, 83] */}
+                {/* チャットルームへのリンク */}
                 <Link
                   href={`/chat/${match.match_id}?selfSpotifyId=${spotifyUserId}&otherUserId=${match.other_user.id}&otherNickname=${encodeURIComponent(match.other_user.nickname)}&otherImageUrl=${encodeURIComponent(match.other_user.profile_image_url || '')}`}
                   className="block bg-gray-800 p-4 rounded-lg flex items-center space-x-4 hover:bg-gray-700 transition-colors duration-150 shadow"

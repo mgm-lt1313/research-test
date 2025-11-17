@@ -60,7 +60,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             i_am_follower = (followRes.rows[0].follower_id === selfId);
         }
 
-        // 4. データを整形して返す
+        // ▼▼▼ 4. 【新設】相手のアーティストを取得 ▼▼▼
+        const artistsRes = await pool.query(
+            `SELECT artist_name, genres::text 
+             FROM user_artists 
+             WHERE user_id = $1 
+             ORDER BY popularity DESC 
+             LIMIT 10`, // 表示件数を10件に制限
+            [targetUserId]
+        );
+        // ▲▲▲ 修正ここまで ▲▲▲
+
+        // 5. データを整形して返す
         res.status(200).json({
             profile: profileRes.rows[0],
             similarity: simRes.rows.length > 0 ? {
@@ -70,7 +81,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 common_genres: JSON.parse(simRes.rows[0].common_genres || '[]')
             } : null,
             follow_status,
-            i_am_follower
+            i_am_follower,
+            // ▼▼▼ 5. 【新設】アーティスト情報をレスポンスに追加 ▼▼▼
+            artists: artistsRes.rows.map((r: any) => ({
+                name: r.artist_name,
+                genres: JSON.parse(r.genres || '[]')
+            }))
+            // ▲▲▲ 修正ここまで ▲▲▲
         });
 
     } catch (dbError: unknown) {

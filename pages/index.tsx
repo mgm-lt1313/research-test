@@ -12,7 +12,7 @@ export default function Home() {
 
       <main className="flex flex-col items-center justify-center w-full flex-1 px-20 text-center">
         <h1 className="text-4xl font-bold mb-6">
-          Spotifyマッチング
+          Spotifyマッチングシステム
         </h1>
 
         

@@ -13,8 +13,6 @@ interface UserProfile {
 }
 
 // --- (ProfileEditor コンポーネント) ---
-// (※ 既存の match.tsx から ProfileEditor コンポーネントをそのままコピー＆ペースト)
-// (変更なし)
 interface ProfileEditorProps {
   isNewUser: boolean;
   handleProfileSubmit: (e: FormEvent) => Promise<void>;
@@ -46,7 +44,7 @@ const ProfileEditor = ({
 }: ProfileEditorProps) => (
   <div className="p-4 max-w-xl mx-auto bg-gray-800 rounded-lg shadow-md mt-4">
     <h2 className="text-xl font-bold text-white mb-4">
-      {isNewUser ? 'プロフィール登録' : 'プロフィール編集'} [cite: 8]
+      {isNewUser ? 'プロフィール登録' : 'プロフィール編集'}
     </h2>
     <form onSubmit={handleProfileSubmit} className="space-y-4">
       
@@ -64,7 +62,7 @@ const ProfileEditor = ({
               rel="noopener noreferrer" 
               className="text-green-400 hover:underline"
             >
-              {spotifyProfile.display_name} (Spotifyで開く) [cite: 10]
+              {spotifyProfile.display_name} (Spotifyで開く)
             </a>
           </div>
         </div>
@@ -72,7 +70,7 @@ const ProfileEditor = ({
 
       {/* ニックネーム */}
       <div>
-        <label htmlFor="nickname" className="block text-white text-sm font-bold mb-2">ニックネーム <span className="text-red-500">*</span> [cite: 11]</label>
+        <label htmlFor="nickname" className="block text-white text-sm font-bold mb-2">ニックネーム <span className="text-red-500">*</span></label>
         <input
           type="text"
           id="nickname"
@@ -99,7 +97,7 @@ const ProfileEditor = ({
       
       {/* 自己紹介 */}
       <div>
-        <label htmlFor="bio" className="block text-white text-sm font-bold mb-2">自己紹介文 (任意) [cite: 12]</label>
+        <label htmlFor="bio" className="block text-white text-sm font-bold mb-2">自己紹介文 (任意)</label>
         <textarea
           id="bio"
           className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline h-24 resize-none"
@@ -115,7 +113,7 @@ const ProfileEditor = ({
           className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
           disabled={loading}
         >
-          {loading ? '保存中...' : '保存'} [cite: 9]
+          {loading ? '保存中...' : '保存'}
         </button>
         {!isNewUser && (
           <button
@@ -161,12 +159,24 @@ export default function Profile() {
       return;
     }
 
+    // ▼▼▼ 修正: LocalStorage にトークンを保存 ▼▼▼
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('spotify_access_token', access_token);
+    }
+    // ▲▲▲ 修正ここまで ▲▲▲
+
     const fetchData = async () => {
       setLoading(true);
       setError(null);
       try {
         const profileData = await getMyProfile(access_token);
         setSpotifyProfile(profileData);
+
+        // ▼▼▼ 修正: LocalStorage に Spotify ID を保存 ▼▼▼
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('spotify_user_id', profileData.id);
+        }
+        // ▲▲▲ 修正ここまで ▲▲▲
 
         // 既存プロフィールをDBから取得
         const existingProfileRes = await axios.get<{ profile: UserProfile | null }>(
@@ -182,7 +192,7 @@ export default function Profile() {
           setIsNewUser(false);
           setIsEditingProfile(false); // デフォルトは表示モード
           
-          // 自分のフォローアーティスト一覧を取得 [cite: 23]
+          // 自分のフォローアーティスト一覧を取得
           const artistsData = await getMyFollowingArtists(access_token);
           setMyArtists(artistsData);
 
@@ -204,7 +214,6 @@ export default function Profile() {
   }, [access_token]);
 
   // プロフィール保存処理
-  // プロフィール保存処理
   const handleProfileSubmit = async (e: FormEvent) => { 
     e.preventDefault();
     if (!spotifyProfile || !nickname.trim()) return setError('ニックネームは必須です。');
@@ -212,15 +221,13 @@ export default function Profile() {
     setLoading(true); 
     setError(null);
     
-    // ▼▼▼ UI改善: 画像URLが空ならSpotifyの画像をフォールバック ▼▼▼
     const imageUrlToSave = profileImageUrl.trim() || spotifyProfile?.images?.[0]?.url || null;
-    // ▲▲▲ UI改善ここまで ▲▲▲
     
     try {
       await axios.post('/api/profile/save', {
         spotifyUserId: spotifyProfile.id, 
         nickname, 
-        profileImageUrl: imageUrlToSave, // 👈 修正した変数を使用
+        profileImageUrl: imageUrlToSave,
         bio,
         accessToken: access_token, 
       }); 
@@ -283,7 +290,7 @@ export default function Profile() {
                 rel="noopener noreferrer" 
                 className="text-sm text-green-400 hover:underline"
               >
-                Spotifyアカウント [cite: 20]
+                Spotifyアカウント
               </a>
             </div>
           </div>
@@ -297,7 +304,7 @@ export default function Profile() {
         <p className="text-gray-300 whitespace-pre-wrap">{bio || '(自己紹介がありません)'}</p>
       </div>
 
-      {/* フォロー中のアーティスト [cite: 23] */}
+      {/* フォロー中のアーティスト */}
       <div className="bg-gray-800 p-6 rounded-lg shadow-md">
         <h3 className="text-xl font-bold mb-4">フォロー中のアーティスト</h3>
         {myArtists.length > 0 ? (
@@ -308,8 +315,8 @@ export default function Profile() {
                   <Image src={artist.images[2].url} alt={artist.name} width={40} height={40} className="w-10 h-10 rounded-full object-cover" />
                 )}
                 <div>
-                  <p className="font-semibold">{artist.name} [cite: 24]</p>
-                  <p className="text-xs text-gray-400">{artist.genres.slice(0, 3).join(', ')} [cite: 25, 26]</p>
+                  <p className="font-semibold">{artist.name}</p>
+                  <p className="text-xs text-gray-400">{artist.genres.slice(0, 3).join(', ')}</p>
                 </div>
               </li>
             ))}
