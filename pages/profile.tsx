@@ -13,7 +13,6 @@ interface UserProfile {
 }
 
 // --- (ProfileEditor コンポーネント) ---
-// ▼▼▼ 修正: 'isEditingProfile', 'setIsEditingProfile' を props から削除 ▼▼▼
 interface ProfileEditorProps {
   isNewUser: boolean;
   handleProfileSubmit: (e: FormEvent) => Promise<void>;
@@ -39,9 +38,7 @@ const ProfileEditor = ({
   loading,
   spotifyProfile
 }: ProfileEditorProps) => (
-  // ▼▼▼ 修正: コンポーネントのラッパーを <section> に変更 ▼▼▼
   <section className="bg-gray-800 p-6 rounded-lg shadow-md mb-6">
-    {/* ▼▼▼ 修正: UI.pdf に合わせてタイトルを変更 ▼▼▼ */}
     <h2 className="text-xl font-bold text-white mb-4">
       プロフィール設定
     </h2>
@@ -101,7 +98,6 @@ const ProfileEditor = ({
         ></textarea>
       </div>
       
-      {/* ▼▼▼ 修正: 「キャンセル」ボタンを削除 ▼▼▼ */}
       <div className="flex justify-start">
         <button
           type="submit"
@@ -111,7 +107,6 @@ const ProfileEditor = ({
           {loading ? '保存中...' : '保存'}
         </button>
       </div>
-      {/* ▲▲▲ 修正ここまで ▲▲▲ */}
     </form>
   </section>
 );
@@ -135,13 +130,9 @@ export default function Profile() {
   
   const [isNewUser, setIsNewUser] = useState<boolean>(true);
   
-  // ▼▼▼ 修正: 'isEditingProfile' state を削除 ▼▼▼
-  // const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false); 
-  // ▲▲▲ 修正ここまで ▲▲▲
-  
   const [myArtists, setMyArtists] = useState<SpotifyArtist[]>([]);
 
-  // (トークンを特定する useEffect は前回の修正のまま)
+  // (トークンを特定する useEffect)
   useEffect(() => {
     if (!router.isReady) return; 
 
@@ -164,7 +155,7 @@ export default function Profile() {
     }
   }, [router.isReady, query_token]);
 
-  // (データ取得の useEffect は前回の修正のまま)
+  // (データ取得の useEffect)
   useEffect(() => {
     if (!accessToken) { 
       return;
@@ -186,9 +177,7 @@ export default function Profile() {
         );
         const existingProfile = existingProfileRes.data.profile;
 
-        // ▼▼▼ 修正: 'isEditingProfile' のロジックを削除 ▼▼▼
         if (existingProfile) {
-          // 既存ユーザー
           setNickname(existingProfile.nickname);
           setProfileImageUrl(existingProfile.profile_image_url || '');
           setBio(existingProfile.bio || '');
@@ -198,13 +187,10 @@ export default function Profile() {
           setMyArtists(artistsData);
 
         } else {
-          // 新規ユーザー
           setNickname(profileData.display_name || '');
           setProfileImageUrl(profileData.images?.[0]?.url || '');
           setIsNewUser(true);
-          // アーティスト一覧はまだ取得しない (保存時に取得)
         }
-        // ▲▲▲ 修正ここまで ▲▲▲
       } catch (e: unknown) {
         console.error('Fetch data error:', e);
         if (e instanceof Error && (e.message.includes('401') || (e as any).response?.status === 401)) {
@@ -223,7 +209,7 @@ export default function Profile() {
     fetchData();
   }, [accessToken]);
 
-  // プロフィール保存処理
+  // (プロフィール保存処理)
   const handleProfileSubmit = async (e: FormEvent) => { 
     e.preventDefault();
     if (!spotifyProfile || !nickname.trim() || !accessToken) {
@@ -247,17 +233,14 @@ export default function Profile() {
       
       alert(isNewUser ? 'プロフィールを登録しました！' : 'プロフィールを更新しました！');
       
-      // ▼▼▼ 修正: 新規ユーザーの場合、マッチングページに遷移 ▼▼▼
       if (isNewUser) {
           router.push({
               pathname: '/matches',
               query: { spotifyUserId: spotifyProfile.id }
           });
       } else {
-          // 既存ユーザーの場合はページをリロードしてアーティスト一覧を最新化
           router.reload();
       }
-      // ▲▲▲ 修正ここまで ▲▲▲
 
     } catch (e: unknown) {
       console.error('Failed to save profile:', e);
@@ -270,12 +253,9 @@ export default function Profile() {
   if (loading) return <div className="p-4 text-center">読み込み中...</div>;
   if (error) return <div className="p-4 text-center text-red-500">{error}</div>;
 
-  // ▼▼▼ 修正: 常に編集フォームとアーティスト一覧を表示する ▼▼▼
+  // ▼▼▼ 修正: max-w-xl を max-w-lg に変更 ▼▼▼
   return (
-    <div className="p-4 max-w-xl mx-auto">
-      {/* h1 の「プロフィール」は新設した Header.tsx が表示するので、
-        このページの h1 は削除します。
-      */}
+    <div className="p-4 max-w-lg mx-auto">
       
       {/* 1. プロフィール編集フォーム */}
       <ProfileEditor
@@ -316,5 +296,4 @@ export default function Profile() {
       )}
     </div>
   );
-  // ▲▲▲ 修正ここまで ▲▲▲
 }
