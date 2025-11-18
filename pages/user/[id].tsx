@@ -1,14 +1,15 @@
 // pages/user/[id].tsx
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import Image from 'next/image';
+import Image from 'next/image'; // 👈 Image コンポーネントをインポート
 
-// Artist 型 (image_url 含む)
+// ▼▼▼ Artist 型に image_url を追加 ▼▼▼
 interface Artist {
   name: string;
   genres: string[];
-  image_url: string | null;
+  image_url: string | null; // 👈 追加
 }
+// ▲▲▲ 修正ここまで ▲▲▲
 
 // ユーザー詳細データの型
 interface UserDetail {
@@ -22,12 +23,12 @@ interface UserDetail {
     artist_similarity: number;
     genre_similarity: number;
     combined_similarity: number;
-    common_artists: string[];
+    common_artists: any[]; // 👈 修正 2a の対応 (object[] になるため)
     common_genres: string[];
   } | null;
   follow_status: 'pending' | 'approved' | 'none';
   i_am_follower: boolean; 
-  artists: Artist[];
+  artists: Artist[]; // 👈 Artist 型が更新された
 }
 
 export default function UserProfilePage() {
@@ -81,7 +82,7 @@ export default function UserProfilePage() {
     fetchUser();
   }, [targetUserId, selfSpotifyId]); 
 
-  // フォロー/フォロー解除処理
+  // フォロー/フォロー解除処理 (変更なし)
   const handleFollow = async () => {
     if (followLoading || !user || !selfSpotifyId) return;
     setFollowLoading(true);
@@ -131,7 +132,7 @@ export default function UserProfilePage() {
 
   const { profile, similarity, follow_status, i_am_follower, artists } = user;
   
-  // フォローボタンのテキストとスタイル
+  // フォローボタンのテキストとスタイル (変更なし)
   let followButtonText = 'フォロー';
   let followButtonClass = 'bg-blue-600 hover:bg-blue-700';
   if (follow_status === 'approved') {
@@ -147,7 +148,7 @@ export default function UserProfilePage() {
 
   return (
     <div className="p-4 max-w-xl mx-auto text-white">
-      {/* 戻るリンク */}
+      {/* 戻るリンク (selfSpotifyIdを付与) */}
       <a href={`/matches?spotifyUserId=${selfSpotifyId}`} className="text-blue-400 hover:text-blue-300 mb-4 inline-block transition-colors">
         &lt; マッチング一覧に戻る
       </a>
@@ -185,16 +186,24 @@ export default function UserProfilePage() {
             </span>
           </div>
 
+          {/* ▼▼▼ 2a. 共通アーティストの表示 (名前 + アイコン) ▼▼▼ */}
           <div className="mb-4">
             <h3 className="font-semibold mb-2">共通しているフォローアーティスト</h3>
             {similarity.common_artists.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {similarity.common_artists.map(artist => (
-                  <span key={artist} className="bg-gray-700 px-3 py-1 rounded-full text-sm">{artist}</span>
+                  <div key={artist.name} className="flex items-center space-x-2 bg-gray-700 px-3 py-1 rounded-full">
+                    {artist.image_url && (
+                      <Image src={artist.image_url} alt={artist.name} width={20} height={20} className="w-5 h-5 rounded-full object-cover" />
+                    )}
+                    <span className="text-sm">{artist.name}</span>
+                  </div>
                 ))}
               </div>
             ) : <p className="text-gray-400 text-sm">共通のアーティストはいません。</p>}
           </div>
+          {/* ▲▲▲ 修正ここまで ▲▲▲ */}
+
 
           <div>
             <h3 className="font-semibold mb-2">共通しているジャンル</h3>
@@ -209,13 +218,14 @@ export default function UserProfilePage() {
         </div>
       )}
 
-      {/* 相手のアーティスト一覧 (Image タグ付き) */}
+      {/* ▼▼▼ 1b. 相手のアーティスト一覧 (Image タグを追加) ▼▼▼ */}
       <div className="bg-gray-800 p-6 rounded-lg shadow-md my-6">
         <h2 className="text-xl font-bold mb-4">フォロー中のアーティスト</h2>
         {artists && artists.length > 0 ? (
           <ul className="space-y-3 max-h-60 overflow-y-auto">
             {artists.map(artist => (
               <li key={artist.name} className="flex items-center space-x-3">
+                {/* 👈 Image タグの追加 */}
                 {artist.image_url ? (
                   <Image src={artist.image_url} alt={artist.name} width={40} height={40} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
                 ) : (
@@ -232,6 +242,7 @@ export default function UserProfilePage() {
           <p className="text-gray-400 text-sm">このユーザーはアーティストをフォローしていません。</p>
         )}
       </div>
+      {/* ▲▲▲ 修正ここまで ▲▲▲ */}
       
     </div>
   );

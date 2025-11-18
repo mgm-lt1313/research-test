@@ -30,9 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const myCommunityId = await getMyCommunityId(selfId);
         
-        // ▼▼▼【修正】ここからロジックを変更 ▼▼▼
-
-        // ベースとなるクエリ（閾値の指定を削除）
+        // (ベースクエリは変更なし)
         const baseQuery = `
             WITH MySimilarities AS (
                 SELECT
@@ -51,8 +49,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     s.artist_similarity,
                     s.genre_similarity,
                     s.combined_similarity,
-                    s.common_artists,
-                    s.common_genres,
+                    s.common_artists,    -- 👈 まだ JSON 文字列
+                    s.common_genres,     -- 👈 まだ JSON 文字列
                     c.community_id,
                     u.nickname,
                     u.profile_image_url,
@@ -77,7 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             FROM MatchesWithFollowStatus
         `;
         
-        // Tier 1: 閾値(0.20)ありのクエリ
+        // (Tier 1 クエリは変更なし)
         const primaryQuery = `
             ${baseQuery}
             WHERE combined_similarity >= 0.20
@@ -87,11 +85,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         
         let { rows } = await pool.query(primaryQuery, [selfId, myCommunityId]);
 
-        // Tier 2: 閾値なしのフォールバッククエリ (Tier 1で0件だった場合)
+        // (Tier 2 クエリは変更なし)
         if (rows.length === 0) {
             console.log(`[get-recommendations] No matches found >= 0.20 for user ${selfId}. Running fallback query.`);
-            
-            // 閾値なし、ただし類似度0は除外する
             const fallbackQuery = `
                 ${baseQuery}
                 WHERE combined_similarity > 0 
@@ -101,9 +97,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const fallbackResult = await pool.query(fallbackQuery, [selfId, myCommunityId]);
             rows = fallbackResult.rows;
         }
+        
+        // ▼▼▼【重要】DBから取得した行データをパースする ▼▼▼
+        const matches = rows.map(row => ({
+          ...row,
+          // common_artists と common_genres を JSON 文字列から配列(オブジェクト)に変換
+          common_artists: JSON.parse(row.common_artists || '[]'),
+          common_genres: JSON.parse(row.common_genres || '[]'),
+        }));
         // ▲▲▲ 修正ここまで ▲▲▲
 
-        res.status(200).json({ matches: rows });
+        res.status(200).json({ matches: matches }); // 👈 パース済みのデータを返す
 
     } catch (dbError) {
         console.error('Recommendation calculation failed:', dbError);

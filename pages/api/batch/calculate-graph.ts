@@ -5,30 +5,37 @@ import { PoolClient } from 'pg';
 import Graph from 'graphology';
 import louvain from 'graphology-communities-louvain';
 
-// ... (SimilarityData, DbUserArtist, calculateJaccard は変更なし) ...
-// (DbUserArtist は artist_name を含むようにクエリ側で調整)
+// 共通アーティストの型
+interface CommonArtistInfo {
+  name: string;
+  image_url: string | null;
+}
+
 interface SimilarityData {
   userA: string;
   userB: string;
   artistSim: number;
   genreSim: number;
   combinedSim: number;
-  commonArtists: string[];
+  commonArtists: CommonArtistInfo[]; // 👈 string[] から変更
   commonGenres: string[];
 }
+
+// DBから取得する型
 interface DbUserArtist {
   user_id: string; // uuid
   artist_id: string;
-  artist_name: string; // 👈 取得対象
+  artist_name: string;
   genres: string; 
+  image_url: string | null; // 👈 image_url を追加
 }
+
 type UserDataMap = Map<string, {
   artists: Set<string>;
   genres: Set<string>;
 }>;
 
 function calculateJaccard(setA: Set<string>, setB: Set<string>): { similarity: number, intersection: Set<string> } {
-  // ... (変更なし) ...
   const intersection = new Set<string>([...setA].filter(x => setB.has(x)));
   const union = new Set<string>([...setA, ...setB]);
   if (union.size === 0) {
@@ -41,18 +48,17 @@ function calculateJaccard(setA: Set<string>, setB: Set<string>): { similarity: n
 /**
  * DBから全ユーザーのアーティストとジャンルのセットを取得
  */
-// ▼▼▼ 戻り値の型を変更 ▼▼▼
 async function getAllArtistData(client: PoolClient): Promise<{
   userMap: UserDataMap,
-  artistNameMap: Map<string, string> // <artist_id, artist_name>
+  artistInfoMap: Map<string, CommonArtistInfo> // <artist_id, {name, image_url}>
 }> {
-  // ▼▼▼ artist_name を SELECT に追加 ▼▼▼
+  // ▼▼▼ artist_name, image_url を SELECT に追加 ▼▼▼
   const res = await client.query<DbUserArtist>(
-    'SELECT user_id, artist_id, artist_name, genres::TEXT FROM user_artists'
+    'SELECT user_id, artist_id, artist_name, genres::TEXT, image_url FROM user_artists'
   );
 
   const userMap: UserDataMap = new Map();
-  const artistNameMap = new Map<string, string>(); // 👈 アーティスト名Mapを新設
+  const artistInfoMap = new Map<string, CommonArtistInfo>(); // 👈 アーティスト情報Map
 
   for (const row of res.rows) {
     if (!userMap.has(row.user_id)) {
@@ -65,13 +71,15 @@ async function getAllArtistData(client: PoolClient): Promise<{
     const userData = userMap.get(row.user_id)!;
     userData.artists.add(row.artist_id);
     
-    // 👈 アーティストIDと名前を紐付け (重複は上書きされるが問題なし)
-    if (row.artist_name) {
-        artistNameMap.set(row.artist_id, row.artist_name);
+    // 👈 アーティストIDと{名前, URL}を紐付け
+    if (row.artist_name && !artistInfoMap.has(row.artist_id)) {
+        artistInfoMap.set(row.artist_id, {
+          name: row.artist_name,
+          image_url: row.image_url
+        });
     }
 
     try {
-      // ... (ジャンル処理は変更なし) ...
       const genres: string[] = JSON.parse(row.genres || '[]');
       for (const genre of genres) {
         userData.genres.add(genre.toLowerCase().trim());
@@ -82,14 +90,12 @@ async function getAllArtistData(client: PoolClient): Promise<{
     }
   }
 
-  return { userMap, artistNameMap }; // 👈 2つのMapを返す
+  return { userMap, artistInfoMap }; // 👈 2つのMapを返す
 }
-// ▲▲▲ getAllArtistData の修正ここまで ▲▲▲
 
 
 // APIメインハンドラ
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // ... (メソッドチェック等は変更なし) ...
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method Not Allowed. Use GET to trigger.' });
   }
@@ -101,12 +107,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await client.query('BEGIN');
 
     // ▼▼▼ 戻り値の受け取り方を変更 ▼▼▼
-    const { userMap, artistNameMap } = await getAllArtistData(client);
+    const { userMap, artistInfoMap } = await getAllArtistData(client);
     const userIds = Array.from(userMap.keys());
     // ▲▲▲ 修正ここまで ▲▲▲
 
     console.log(`[Batch] Step 1: Loaded data for ${userIds.length} users.`);
-    // ... (ユーザー数チェックは変更なし) ...
+
+    if (userIds.length < 2) {
+      await client.query('ROLLBACK');
+      console.log('[Batch] Canceled: Need at least 2 users to calculate similarities.');
+      return res.status(200).json({ message: 'Calculation skipped: Need at least 2 users.' });
+    }
 
     const allSimilarities: SimilarityData[] = []; 
     for (let i = 0; i < userIds.length; i++) {
@@ -117,14 +128,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const dataA = userMap.get(userA_id)!;
         const dataB = userMap.get(userB_id)!;
 
-        // ▼▼▼ 共通アーティストIDを取得し、名前に変換 ▼▼▼
+        // ▼▼▼ 共通アーティストIDを取得し、{名前, URL} オブジェクトに変換 ▼▼▼
         const { similarity: artistSim, intersection: commonArtistIds } = calculateJaccard(dataA.artists, dataB.artists);
         const { similarity: genreSim, intersection: commonGenres } = calculateJaccard(dataA.genres, dataB.genres);
 
-        // 共通アーティストの「ID」を「名前」に変換
+        // 共通アーティストの「ID」を「{名前, URL}」に変換
         const commonArtists = Array.from(commonArtistIds)
-            .map(id => artistNameMap.get(id)) // IDを名前にマッピング
-            .filter((name): name is string => !!name); // undefined を除去
+            .map(id => artistInfoMap.get(id)) // IDを情報オブジェクトにマッピング
+            .filter((info): info is CommonArtistInfo => !!info); // undefined を除去
 
         // ▲▲▲ 修正ここまで ▲▲▲
 
@@ -140,31 +151,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           artistSim,
           genreSim,
           combinedSim,
-          commonArtists: commonArtists,       // 👈 名前の配列
+          commonArtists: commonArtists,       // 👈 オブジェクトの配列
           commonGenres: Array.from(commonGenres),
         });
       }
     }
     console.log(`[Batch] Step 2: Calculated ${allSimilarities.length} similarity pairs.`);
 
-    // ... (TRUNCATE TABLE similarities CASCADE は変更なし) ...
     await client.query('TRUNCATE TABLE similarities CASCADE');
     
     if (allSimilarities.length > 0) {
-      // ... (simValues の型定義を変更) ...
-      // ▼▼▼ simValues の型定義を変更 ▼▼▼
       const simValues: (string | number | null | string[])[] = []; 
       const simQueryRows = allSimilarities.map((sim, index) => {
         const i = index * 7;
         simValues.push(
           sim.userA, sim.userB, sim.artistSim, sim.genreSim, 
           sim.combinedSim, 
-          JSON.stringify(sim.commonArtists), // 👈 名前の配列をJSON化
+          JSON.stringify(sim.commonArtists), // 👈 オブジェクト配列をJSON化
           JSON.stringify(sim.commonGenres)
         );
         return `($${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, $${i + 7})`;
       });
-      // ... (INSERT クエリは変更なし) ...
       const simInsertQuery = `
         INSERT INTO similarities (user_a_id, user_b_id, artist_similarity, genre_similarity, combined_similarity, common_artists, common_genres)
         VALUES ${simQueryRows.join(', ')}
@@ -175,11 +182,68 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // ... (以降のグラフ構築、Louvain法、レスポンス部分は変更なし) ...
     const graph = new Graph();
-    // ...
-    // res.status(200).json(...)
+    const similarityThreshold = 0.15;
+
+    for (const userId of userIds) {
+      graph.addNode(userId);
+    }
+
+    for (const sim of allSimilarities) {
+      if (sim.combinedSim >= similarityThreshold) {
+        graph.addUndirectedEdge(sim.userA, sim.userB, { weight: sim.combinedSim });
+      }
+    }
+    console.log(`[Batch] Step 4: Graph built (${graph.order} nodes, ${graph.size} edges).`);
+
+    let communityAssignments: { [key: string]: number } = {};
+    let communityCount = 0;
+
+    if (graph.size > 0) {
+      communityAssignments = louvain(graph, { 
+        resolution: 1.0
+      });
+
+      await client.query('TRUNCATE TABLE communities CASCADE'); 
+
+      const communityEntries = Object.entries(communityAssignments); 
+      if (communityEntries.length > 0) {
+        const commValues: (string | number)[] = [];
+        const commQueryRows = communityEntries.map(([userId, communityId], index) => {
+          const i = index * 2;
+          commValues.push(userId, communityId as number);
+          return `($${i + 1}, $${i + 2})`;
+        });
+        const commInsertQuery = `
+          INSERT INTO communities (user_id, community_id)
+          VALUES ${commQueryRows.join(', ')}
+        `;
+        await client.query(commInsertQuery, commValues);
+      }
+      
+      communityCount = new Set(Object.values(communityAssignments)).size;
+      console.log(`[Batch] Step 5 & 6: Communities detected (${communityCount}) and saved to DB.`);
+    
+    } else {
+      console.log(`[Batch] Step 5 & 6: Skipped community detection (no edges in graph).`);
+      await client.query('TRUNCATE TABLE communities CASCADE'); 
+    }
+
+    await client.query('COMMIT');
+    console.log('[Batch] === Success: All calculations committed. ===');
+    
+    res.status(200).json({ 
+      message: 'Batch calculation successful.',
+      users: userIds.length,
+      pairs: allSimilarities.length,
+      edges: graph.size,
+      communities: communityCount
+    });
 
   } catch (error: unknown) {
-    // ... (エラーハンドリングは変更なし) ...
+    await client.query('ROLLBACK');
+    console.error('[Batch] === Error: Transaction rolled back. ===', error);
+    const message = error instanceof Error ? error.message : 'Unknown batch error';
+    res.status(500).json({ message });
   } finally {
     client.release();
   }

@@ -5,7 +5,13 @@ import axios from 'axios';
 import Image from 'next/image';
 import Link from 'next/link';
 
-// (MatchResult 型定義は変更なし)
+// ▼▼▼ 共通アーティストの型を定義 ▼▼▼
+interface CommonArtist {
+  name: string;
+  image_url: string | null;
+}
+// ▲▲▲ 修正ここまで ▲▲▲
+
 interface MatchResult {
   other_user_id: string; // uuid
   nickname: string;
@@ -16,7 +22,7 @@ interface MatchResult {
   combined_similarity: number;
   match_score: number;
   is_same_community: boolean;
-  common_artists: string[]; 
+  common_artists: CommonArtist[]; // 👈 string[] から CommonArtist[] に変更
   common_genres: string[];
   follow_status: 'pending' | 'approved' | null;
   i_am_follower: boolean;
@@ -66,7 +72,6 @@ export default function Matches() {
   if (loading) return <div className="p-4 text-center">マッチング相手を検索中...</div>;
   if (error) return <div className="p-4 text-center text-red-500">{error}</div>;
 
-  // ▼▼▼ 修正: max-w-xl を max-w-lg に変更 ▼▼▼
   return (
     <div className="p-4 max-w-lg mx-auto">
       <h1 className="text-3xl font-bold text-white mb-6">マッチング</h1>
@@ -107,11 +112,25 @@ export default function Matches() {
                       </span>
                   </div>
 
+                  {/* ▼▼▼ 共通アーティストの表示をアイコン + 名前に変更 ▼▼▼ */}
                   {match.common_artists && match.common_artists.length > 0 ? (
-                    <div className="text-xs text-gray-300 mt-2">
-                      <span className="font-semibold">共通アーティスト:</span>
-                      <span className="ml-1">{match.common_artists.slice(0, 2).join(', ')}{match.common_artists.length > 2 ? ' ...' : ''}</span>
+                    <div className="text-xs text-gray-300 mt-2 flex items-center space-x-2 overflow-hidden">
+                      <span className="font-semibold flex-shrink-0">共通:</span>
+                      <div className="flex space-x-2">
+                        {match.common_artists.slice(0, 3).map(artist => ( // 3件まで表示
+                          <div key={artist.name} className="flex items-center space-x-1 bg-gray-700 px-2 py-0.5 rounded-full flex-shrink-0">
+                            {artist.image_url && (
+                              <Image src={artist.image_url} alt={artist.name} width={12} height={12} className="w-3 h-3 rounded-full" />
+                            )}
+                            <span className="text-xs">{artist.name}</span>
+                          </div>
+                        ))}
+                        {match.common_artists.length > 3 && (
+                          <span className="text-xs text-gray-400">...</span>
+                        )}
+                      </div>
                     </div>
+                  // ▲▲▲ 修正ここまで ▲▲▲
                   ) : match.common_genres && match.common_genres.length > 0 ? (
                     <div className="text-xs text-gray-300 mt-2">
                       <span className="font-semibold">共通ジャンル:</span>
@@ -130,5 +149,4 @@ export default function Matches() {
       )}
     </div>
   );
-  // ▲▲▲ 修正ここまで ▲▲▲
 }
