@@ -30,7 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const myCommunityId = await getMyCommunityId(selfId);
         
-        // (ベースクエリは変更なし)
+        // ▼▼▼【修正】common_artists と common_genres を ::text にキャスト ▼▼▼
         const baseQuery = `
             WITH MySimilarities AS (
                 SELECT
@@ -38,8 +38,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     artist_similarity,
                     genre_similarity,
                     combined_similarity,
-                    common_artists,
-                    common_genres
+                    common_artists::text, 
+                    common_genres::text
                 FROM similarities
                 WHERE (user_a_id = $1 OR user_b_id = $1)
             ),
@@ -49,8 +49,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     s.artist_similarity,
                     s.genre_similarity,
                     s.combined_similarity,
-                    s.common_artists,    -- 👈 まだ JSON 文字列
-                    s.common_genres,     -- 👈 まだ JSON 文字列
+                    s.common_artists,    -- 👈 textとして受け取る
+                    s.common_genres,     -- 👈 textとして受け取る
                     c.community_id,
                     u.nickname,
                     u.profile_image_url,
@@ -74,6 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             SELECT *
             FROM MatchesWithFollowStatus
         `;
+        // ▲▲▲ 修正ここまで ▲▲▲
         
         // (Tier 1 クエリは変更なし)
         const primaryQuery = `
@@ -97,17 +98,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const fallbackResult = await pool.query(fallbackQuery, [selfId, myCommunityId]);
             rows = fallbackResult.rows;
         }
-        
-        // ▼▼▼【重要】DBから取得した行データをパースする ▼▼▼
+
+        // (JSONパース処理は変更なし - textをパースするので正しい)
         const matches = rows.map(row => ({
           ...row,
-          // common_artists と common_genres を JSON 文字列から配列(オブジェクト)に変換
           common_artists: JSON.parse(row.common_artists || '[]'),
           common_genres: JSON.parse(row.common_genres || '[]'),
         }));
-        // ▲▲▲ 修正ここまで ▲▲▲
 
-        res.status(200).json({ matches: matches }); // 👈 パース済みのデータを返す
+        res.status(200).json({ matches: matches });
 
     } catch (dbError) {
         console.error('Recommendation calculation failed:', dbError);
