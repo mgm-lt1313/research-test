@@ -17,20 +17,23 @@ function MyApp({ Component, pageProps }: AppProps) {
         <title>Spotify音楽嗜好マッチング</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>
-      {/* ▼▼▼ 修正: スタイリングが適用されるよう class を確認 ▼▼▼ */}
-      <div className="dark min-h-screen bg-gray-900 text-white">
+      
+      {/* ▼▼▼ この div のクラス名を変更します ▼▼▼ */}
+      <div className="min-h-screen bg-white text-gray-900">
+      {/* 変更点：
+        1. `dark` を削除
+        2. `bg-gray-900` を `bg-white` に変更
+        3. `text-white` を `text-gray-900` に変更
+      */}
+      {/* ▲▲▲ 変更ここまで ▲▲▲ */}
         
         {showNavigation && <Header />}
 
-        {/* ▼▼▼ 修正: pb-20 (フッターパディング) を削除 ▼▼▼ */}
         <main className="pt-20"> 
           <Component {...pageProps} />
         </main>
-
-        {/* 👈 4. NavBar (フッター) の呼び出しを削除 */}
-        {/* {showNavigation && <NavBar />} */}
+        
       </div>
-      {/* ▲▲▲ 修正ここまで ▲▲▲ */}
     </>
   );
 }
