@@ -5,26 +5,94 @@ import axios from 'axios';
 import Image from 'next/image';
 import Link from 'next/link';
 
-// ... (型定義 FollowUser, MatchUser は変更なし) ...
-interface FollowUser { /* ... */ }
-interface MatchUser { /* ... */ }
+// 型定義
+interface FollowUser {
+  id: number; // followsテーブルのID
+  user_id: string; // 相手のuser ID (uuid)
+  nickname: string;
+  profile_image_url: string | null;
+}
+interface MatchUser {
+  id: number; // followsテーブルのID (チャットルームID)
+  user_id: string; // 相手のuser ID (uuid)
+  nickname: string;
+  profile_image_url: string | null;
+}
 
 export default function Follows() {
-  // ... (useState, useEffect, handleAccept などのロジックは変更なし) ...
   const router = useRouter();
-  const [spotifyUserId, setSpotifyUserId] = useState<string | undefined>(/* ... */);
-  useEffect(() => { /* ... */ }, [router.isReady, spotifyUserId]);
+  // ▼▼▼ 修正: LocalStorage からのフォールバックを追加 ▼▼▼
+  const [spotifyUserId, setSpotifyUserId] = useState<string | undefined>(router.query.spotifyUserId as string | undefined);
+  
+  useEffect(() => {
+    if (router.isReady && !spotifyUserId) {
+        const storedId = localStorage.getItem('spotify_user_id');
+        if (storedId) {
+            setSpotifyUserId(storedId);
+        }
+    }
+  }, [router.isReady, spotifyUserId]);
+  // ▲▲▲ 修正ここまで ▲▲▲
+
   const [followers, setFollowers] = useState<FollowUser[]>([]); 
   const [pending, setPending] = useState<FollowUser[]>([]);     
   const [matches, setMatches] = useState<MatchUser[]>([]);       
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<number | null>(null);
-  useEffect(() => { /* ... */ }, [spotifyUserId, router.isReady]);
-  const handleAccept = async (followId: number) => { /* ... */ };
-  // ... (loading, error の return は変更なし) ...
-  const userDetailLink = (userId: string) => ({ /* ... */ });
 
+  useEffect(() => {
+    if (!spotifyUserId) {
+        if (router.isReady) { // router.isReady かつ spotifyUserId が未定義の場合のみエラー
+            setError('ユーザー情報がありません。');
+            setLoading(false);
+        }
+        return;
+    }
+    // ▲▲▲ 修正ここまで ▲▲▲
+
+    const fetchLists = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await axios.get(`/api/follow/list?spotifyUserId=${spotifyUserId}`);
+        setFollowers(res.data.pendingRequestsToMe || []);
+        setPending(res.data.pendingRequestsFromMe || []);
+        setMatches(res.data.approvedMatches || []);
+      } catch (e: unknown) {
+         console.error("Failed to fetch follow lists:", e);
+         setError('リストの取得に失敗しました。');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLists();
+  }, [spotifyUserId, router.isReady]); // 👈 spotifyUserId が変更されたら再実行
+
+  const handleAccept = async (followId: number) => {
+    if (!spotifyUserId || acceptingId) return;
+    setAcceptingId(followId);
+    try {
+      await axios.post('/api/follow/accept', {
+        selfSpotifyId: spotifyUserId,
+        followId: followId,
+      });
+      router.reload();
+    } catch (e: unknown) {
+      console.error("Failed to accept follow request:", e);
+      alert('承認に失敗しました。');
+      setAcceptingId(null);
+    }
+  };
+
+  if (loading) return <div className="p-4 text-center">読み込み中...</div>;
+  if (error) return <div className="p-4 text-center text-red-500">{error}</div>;
+  
+  const userDetailLink = (userId: string) => ({
+      pathname: `/user/${userId}`,
+      query: { selfSpotifyId: spotifyUserId }
+  });
 
   return (
     <div className="p-4 max-w-lg mx-auto text-white">
@@ -45,6 +113,7 @@ export default function Follows() {
                      <div className="w-12 h-12 rounded-full bg-gray-600 flex-shrink-0"></div>
                   )}
                   <div className="overflow-hidden">
+                    {/* ▼▼▼ 修正: [cite] 削除 ▼▼▼ */}
                     <h3 className="font-bold text-lg truncate">{match.nickname}</h3>
                   </div>
                 </Link>
@@ -70,6 +139,7 @@ export default function Follows() {
                   ): (
                     <div className="w-10 h-10 rounded-full bg-gray-600 flex-shrink-0"></div>
                   )}
+                  {/* ▼▼▼ 修正: [cite] 削除 ▼▼▼ */}
                   <span className="font-medium truncate">{req.nickname}</span>
                 </Link>
                 <button
@@ -105,6 +175,7 @@ export default function Follows() {
                   ): (
                     <div className="w-10 h-10 rounded-full bg-gray-600 flex-shrink-0"></div>
                   )}
+                  {/* ▼▼▼ 修正: [cite] 削除 ▼▼▼ */}
                   <span className="font-medium truncate">{req.nickname}</span>
                 </Link>
                 <span className="text-sm text-gray-400 flex-shrink-0">承認待ち</span>

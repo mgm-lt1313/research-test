@@ -5,23 +5,70 @@ import axios from 'axios';
 import Image from 'next/image';
 import Link from 'next/link';
 
-// ... (型定義 ApprovedMatch は変更なし) ...
-interface ApprovedMatch { /* ... */ }
+// マッチ済みの相手の型
+interface ApprovedMatch {
+  match_id: number; // followsテーブルのID (チャットルームID)
+  other_user: {
+    id: string; // 相手のuser ID (uuid)
+    nickname: string;
+    profile_image_url: string | null;
+  };
+}
 
 export default function Chats() {
-  // ... (ロジックは変更なし) ...
   const router = useRouter();
-  const [spotifyUserId, setSpotifyUserId] = useState<string | undefined>(/* ... */);
-  useEffect(() => { /* ... */ }, [router.isReady, spotifyUserId]);
-  const [matches, setMatches] = useState<ApprovedMatch[]>([]);
-  // ...
+  // ▼▼▼ 修正: LocalStorage からのフォールバックを追加 ▼▼▼
+  const [spotifyUserId, setSpotifyUserId] = useState<string | undefined>(router.query.spotifyUserId as string | undefined);
+  
+  useEffect(() => {
+    if (router.isReady && !spotifyUserId) {
+        const storedId = localStorage.getItem('spotify_user_id');
+        if (storedId) {
+            setSpotifyUserId(storedId);
+        }
+    }
+  }, [router.isReady, spotifyUserId]);
+  // ▲▲▲ 修正ここまで ▲▲▲
 
-  // ... (loading, error の return は変更なし) ...
+  const [matches, setMatches] = useState<ApprovedMatch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!spotifyUserId) {
+        if(router.isReady) {
+            setError('ユーザー情報がありません。');
+            setLoading(false);
+        }
+        return;
+    }
+    // ▲▲▲ 修正ここまで ▲▲▲
+
+    const fetchMatches = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await axios.get(`/api/chat/list?spotifyUserId=${spotifyUserId}`);
+        setMatches(res.data.approvedMatches || []);
+      } catch (e: unknown) {
+         console.error("Failed to fetch chat lists:", e);
+         setError('チャットリストの取得に失敗しました。');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMatches();
+  }, [spotifyUserId, router.isReady]); // 👈 spotifyUserId が変更されたら再実行
+
+  if (loading) return <div className="p-4 text-center">読み込み中...</div>;
+  if (error) return <div className="p-4 text-center text-red-500">{error}</div>;
 
   return (
     <div className="p-4 max-w-lg mx-auto text-white">
+      {/* ▼▼▼ 修正: [cite] 削除 ▼▼▼ */}
       <h1 className="text-3xl font-bold mb-6">チャット</h1>
 
+      {/* --- マッチ一覧 (チャットルームへのリンク) --- */}
       <section>
         {matches.length > 0 ? (
           <ul className="space-y-3">
