@@ -139,8 +139,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // ▲▲▲ 修正ここまで ▲▲▲
 
-        const w1 = 0.6;
-        const w2 = 0.4;
+        const w1 = 0.5;
+        const w2 = 0.5;
         const combinedSim = (artistSim * w1) + (genreSim * w2);
 
         const [id1, id2] = [userA_id, userB_id].sort();
