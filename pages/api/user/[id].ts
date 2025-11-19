@@ -65,8 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             `SELECT artist_name, genres::text, image_url 
              FROM user_artists 
              WHERE user_id = $1 
-             ORDER BY popularity DESC 
-             LIMIT 10`, // 10件に制限
+             ORDER BY popularity DESC `, 
             [targetUserId]
         );
         // ▲▲▲ 修正ここまで ▲▲▲
