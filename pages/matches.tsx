@@ -4,61 +4,58 @@ import { useRouter } from 'next/router';
 import axios from 'axios';
 import Image from 'next/image';
 import Link from 'next/link';
+import { supabase } from '../lib/supabaseClient';
 
-// ▼▼▼ 共通アーティストの型を定義 ▼▼▼
-interface CommonArtist {
-  name: string;
-  image_url: string | null;
-}
-// ▲▲▲ 修正ここまで ▲▲▲
-
+// マッチング結果の型定義（趣味タグ版）
 interface MatchResult {
   other_user_id: string; // uuid
   nickname: string;
   profile_image_url: string | null;
   bio: string | null;
-  artist_similarity: number;
-  genre_similarity: number;
-  combined_similarity: number;
-  match_score: number;
-  is_same_community: boolean;
-  common_artists: CommonArtist[]; // 👈 string[] から CommonArtist[] に変更
-  common_genres: string[];
-  follow_status: 'pending' | 'approved' | null;
-  i_am_follower: boolean;
+  score: number;         // 一致度 (0.0〜1.0)
+  match_count: number;   // 合致したタグの数
+  common_tags: string[]; // 共通タグのリスト
 }
 
 export default function Matches() {
   const router = useRouter();
-  const { spotifyUserId } = router.query as { spotifyUserId?: string };
-
   const [matches, setMatches] = useState<MatchResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    let id = spotifyUserId;
-    if (!id && typeof window !== 'undefined') {
-      id = localStorage.getItem('spotify_user_id') || undefined;
-    }
-    
-    if (!id) {
-      if (router.isReady) {
-        setError('ユーザー情報がありません。プロフィールページに戻ってください。');
-        setLoading(false);
+    // ログインユーザーの確認
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        if (router.isReady) {
+          setError('ログインしていません。トップページに戻ってください。');
+          setLoading(false);
+        }
+        return;
       }
-      return;
-    }
+      setCurrentUserId(session.user.id);
+    };
+    checkUser();
+  }, [router.isReady]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
 
     const fetchMatches = async () => {
       setLoading(true);
       setError(null);
       try {
-        const matchRes = await axios.post('/api/match/get-recommendations', { 
-            spotifyUserId: id
+        // おすすめユーザー取得APIを呼び出し
+        // (API側も hobby_tags 対応に変更されている前提)
+        const res = await axios.post('/api/match/get-recommendations', { 
+            userId: currentUserId // Google認証版に合わせてパラメータ名を変更しても良いですが、既存APIが spotifyUserId を期待している場合は合わせるかAPI側を修正してください。ここでは汎用的に userId とします。
         });
-        setMatches(matchRes.data.matches as MatchResult[]);
-      } catch (e: unknown) {
+        
+        // APIのレスポンス形式に合わせてセット
+        setMatches(res.data.matches || []);
+      } catch (e: any) {
         console.error('Failed to fetch recommendations:', e);
         setError('おすすめユーザーの取得に失敗しました。');
       } finally {
@@ -66,10 +63,9 @@ export default function Matches() {
       }
     };
     fetchMatches();
-  }, [spotifyUserId, router.isReady]);
+  }, [currentUserId]);
 
-
-  if (loading) return <div className="p-4 text-center">マッチング相手を検索中...</div>;
+  if (loading) return <div className="p-4 text-center text-white">マッチング相手を検索中...</div>;
   if (error) return <div className="p-4 text-center text-red-500">{error}</div>;
 
   return (
@@ -80,67 +76,68 @@ export default function Matches() {
         <div className="bg-gray-800 p-6 rounded-lg text-center text-gray-400">
           <p className="text-lg font-semibold mb-2">まだおすすめのユーザーがいません</p>
           <p className="text-sm">
-            新しいユーザーが登録されると、マッチング計算が自動的に実行されます。
+            自分や他のユーザーがプロフィールを登録すると、マッチング計算が行われます。
           </p>
         </div>
       ) : (
         <ul className="space-y-4">
           {matches.map((match) => (
-            <li key={match.other_user_id} className="bg-gray-800 p-4 rounded-lg shadow-md">
+            <li key={match.other_user_id} className="bg-gray-800 p-4 rounded-lg shadow-md list-none">
               <Link 
                 href={{ 
                   pathname: `/user/${match.other_user_id}`,
-                  query: { selfSpotifyId: spotifyUserId || localStorage.getItem('spotify_user_id') }
                 }}
                 className="flex space-x-4"
               >
+                {/* プロフィール画像 */}
                 {match.profile_image_url ? (
-                  <Image src={match.profile_image_url} alt={match.nickname} width={56} height={56} className="w-14 h-14 rounded-full object-cover flex-shrink-0" />
+                  <Image 
+                    src={match.profile_image_url} 
+                    alt={match.nickname} 
+                    width={56} 
+                    height={56} 
+                    className="w-14 h-14 rounded-full object-cover flex-shrink-0" 
+                  />
                 ) : (
                   <div className="w-14 h-14 rounded-full bg-gray-600 flex-shrink-0"></div>
                 )}
                 
                 <div className="flex-grow min-w-0">
-                  <h3 className="text-lg font-bold truncate">{match.nickname}</h3>
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-bold truncate text-white">{match.nickname}</h3>
+                    {/* マッチ度表示 */}
+                    <span className="text-sm font-bold text-green-400">
+                      一致度: {Math.round(match.score * 100)}%
+                    </span>
+                  </div>
                   
                   <p className="text-sm text-gray-300 mt-1 truncate">{match.bio || '(自己紹介なし)'}</p>
 
-                  <div className="text-sm mt-1">
-                      <span className="font-bold text-green-400">マッチ率: {Math.round(match.combined_similarity * 100)}%</span>
-                      <span className="text-xs text-gray-400 ml-2">
-                          (アーティスト: {Math.round(match.artist_similarity * 100)}%, ジャンル: {Math.round(match.genre_similarity * 100)}%)
-                      </span>
-                  </div>
-
-                  {/* ▼▼▼ 共通アーティストの表示をアイコン + 名前に変更 ▼▼▼ */}
-                  {match.common_artists && match.common_artists.length > 0 ? (
-                    <div className="text-xs text-gray-300 mt-2 flex items-center space-x-2 overflow-hidden">
-                      <span className="font-semibold flex-shrink-0">共通:</span>
-                      <div className="flex space-x-2">
-                        {match.common_artists.slice(0, 3).map(artist => ( // 3件まで表示
-                          <div key={artist.name} className="flex items-center space-x-1 bg-gray-700 px-2 py-0.5 rounded-full flex-shrink-0">
-                            {artist.image_url && (
-                              <Image src={artist.image_url} alt={artist.name} width={12} height={12} className="w-3 h-3 rounded-full" />
-                            )}
-                            <span className="text-xs">{artist.name}</span>
-                          </div>
+                  {/* 共通タグの表示 */}
+                  <div className="mt-3">
+                    <span className="text-xs text-gray-400 block mb-1">
+                      共通の趣味 ({match.match_count}個):
+                    </span>
+                    {match.common_tags && match.common_tags.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {match.common_tags.slice(0, 5).map((tag) => (
+                          <span 
+                            key={tag} 
+                            className="bg-green-600 text-white text-xs px-2 py-1 rounded-full"
+                          >
+                            {tag}
+                          </span>
                         ))}
-                        {match.common_artists.length > 3 && (
-                          <span className="text-xs text-gray-400">...</span>
+                        {match.common_tags.length > 5 && (
+                          <span className="text-xs text-gray-500 self-center">
+                            +{match.common_tags.length - 5}
+                          </span>
                         )}
                       </div>
-                    </div>
-                  // ▲▲▲ 修正ここまで ▲▲▲
-                  ) : match.common_genres && match.common_genres.length > 0 ? (
-                    <div className="text-xs text-gray-300 mt-2">
-                      <span className="font-semibold">共通ジャンル:</span>
-                      <span className="ml-1">{match.common_genres.slice(0, 2).join(', ')}{match.common_genres.length > 2 ? ' ...' : ''}</span>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-gray-400 mt-2">
-                      (詳細を見る)
-                    </div>
-                  )}
+                    ) : (
+                      <span className="text-xs text-gray-500">共通の趣味タグはありません</span>
+                    )}
+                  </div>
                 </div>
               </Link>
             </li>
