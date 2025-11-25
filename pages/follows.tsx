@@ -16,9 +16,9 @@ export default function Follows() {
   const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   
-  const [followers, setFollowers] = useState<FollowUser[]>([]); // フォロワー
-  const [pending, setPending] = useState<FollowUser[]>([]);     // フォロー中
-  const [matches, setMatches] = useState<FollowUser[]>([]);     // マッチング
+  const [followers, setFollowers] = useState<FollowUser[]>([]); 
+  const [pending, setPending] = useState<FollowUser[]>([]);     
+  const [matches, setMatches] = useState<FollowUser[]>([]);     
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,9 +87,9 @@ export default function Follows() {
     <div className="p-4 max-w-lg mx-auto text-white min-h-screen">
       <h1 className="text-3xl font-bold mb-6">フォロー状況</h1>
 
-      {/* 1. 相互フォロー (マッチング) */}
+      {/* 1. 相互フォロー */}
       <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">相互フォロー (マッチング)</h2>
+        <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">相互フォロー</h2>
         {matches.length > 0 ? (
           <ul className="space-y-3">
             {matches.map(match => (
@@ -113,9 +113,9 @@ export default function Follows() {
         )}
       </section>
 
-      {/* 2. フォロワー (承認待ち) */}
+      {/* 2. フォロワー */}
       <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">フォロワー (承認待ち)</h2>
+        <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">フォロワー</h2>
         {followers.length > 0 ? (
           <ul className="space-y-3">
             {followers.map(req => (
@@ -145,7 +145,7 @@ export default function Follows() {
       
       {/* 3. フォロー中 */}
       <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">フォロー中 (相手の承認待ち)</h2>
+        <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">フォロー中</h2>
         {pending.length > 0 ? (
           <ul className="space-y-3">
             {pending.map(req => (

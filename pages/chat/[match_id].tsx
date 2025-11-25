@@ -60,7 +60,14 @@ export default function ChatRoom() {
                 event: 'INSERT', schema: 'public', table: 'messages', 
                 filter: `match_id=eq.${match_id}` 
             }, (payload) => {
-                setMessages(prev => [...prev, payload.new as Message]);
+                const newMsg = payload.new as Message;
+                // 既に表示されているメッセージ(APIレスポンス等)と重複しないかチェック
+                setMessages(prev => {
+                    if (prev.some(msg => msg.id === newMsg.id)) {
+                        return prev;
+                    }
+                    return [...prev, newMsg];
+                });
             })
             .subscribe();
 
@@ -78,17 +85,23 @@ export default function ChatRoom() {
 
         setSending(true);
         const content = newMessage;
-        setNewMessage('');
+        setNewMessage(''); // 入力欄をクリア
 
         try {
-            await axios.post(`/api/chat/${match_id}`, {
+            const res = await axios.post(`/api/chat/${match_id}`, {
                 senderId: currentUserId,
                 content: content,
             });
+            
+            // APIレスポンスから新しいメッセージを取得して即座に追加
+            const sentMsg = res.data.newMessage;
+            if (sentMsg) {
+                setMessages(prev => [...prev, sentMsg]);
+            }
         } catch (err) {
            console.error("Send error:", err);
            alert('送信に失敗しました');
-           setNewMessage(content); // 戻す
+           setNewMessage(content); // エラー時は入力を戻す
         } finally {
             setSending(false);
         }
