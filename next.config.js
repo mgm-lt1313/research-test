@@ -1,21 +1,26 @@
-// next.config.js
-module.exports = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   images: {
-    // ▼▼▼ "domains" から "remotePatterns" に変更します ▼▼▼
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'i.scdn.co', // 既存のSpotifyドメイン
+        hostname: 'lh3.googleusercontent.com', // Googleアイコン用
       },
       {
         protocol: 'https',
-        hostname: 'yboauknclliydigxwtju.supabase.co', // 👈 あなたのSupabaseドメイン
+        hostname: 'i.scdn.co', // 旧Spotify用（念のため）
+      },
+      {
+        // あなたのSupabaseのドメイン (例: xxxxx.supabase.co)
+        // Vercelのログでエラーが出る場合は、SupabaseダッシュボードのURLを確認して合わせてください
+        protocol: 'https',
+        hostname: 'yboauknclliydigxwtju.supabase.co', 
       },
     ],
-    // ▲▲▲ 修正ここまで ▲▲▲
   },
   eslint: {
-    // ビルド時にESLintエラーがあってもビルドを続行する
     ignoreDuringBuilds: true,
   },
 };
+
+module.exports = nextConfig;
