@@ -1,120 +1,108 @@
-// pages/follows.tsx
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import axios from 'axios';
 import Image from 'next/image';
 import Link from 'next/link';
+import { supabase } from '../lib/supabaseClient';
 
-// 型定義
 interface FollowUser {
-  id: number; // followsテーブルのID
-  user_id: string; // 相手のuser ID (uuid)
-  nickname: string;
-  profile_image_url: string | null;
-}
-interface MatchUser {
-  id: number; // followsテーブルのID (チャットルームID)
-  user_id: string; // 相手のuser ID (uuid)
+  id: number;
+  user_id: string;
   nickname: string;
   profile_image_url: string | null;
 }
 
 export default function Follows() {
   const router = useRouter();
-  // ▼▼▼ 修正: LocalStorage からのフォールバックを追加 ▼▼▼
-  const [spotifyUserId, setSpotifyUserId] = useState<string | undefined>(router.query.spotifyUserId as string | undefined);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   
-  useEffect(() => {
-    if (router.isReady && !spotifyUserId) {
-        const storedId = localStorage.getItem('spotify_user_id');
-        if (storedId) {
-            setSpotifyUserId(storedId);
-        }
-    }
-  }, [router.isReady, spotifyUserId]);
-  // ▲▲▲ 修正ここまで ▲▲▲
-
-  const [followers, setFollowers] = useState<FollowUser[]>([]); 
-  const [pending, setPending] = useState<FollowUser[]>([]);     
-  const [matches, setMatches] = useState<MatchUser[]>([]);       
+  const [followers, setFollowers] = useState<FollowUser[]>([]); // フォロワー
+  const [pending, setPending] = useState<FollowUser[]>([]);     // フォロー中
+  const [matches, setMatches] = useState<FollowUser[]>([]);     // マッチング
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!spotifyUserId) {
-        if (router.isReady) { // router.isReady かつ spotifyUserId が未定義の場合のみエラー
-            setError('ユーザー情報がありません。');
-            setLoading(false);
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setCurrentUserId(session.user.id);
+      } else {
+        if (router.isReady) {
+          setError('ログインしてください');
+          setLoading(false);
         }
-        return;
-    }
-    // ▲▲▲ 修正ここまで ▲▲▲
+      }
+    };
+    checkUser();
+  }, [router.isReady]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
 
     const fetchLists = async () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await axios.get(`/api/follow/list?spotifyUserId=${spotifyUserId}`);
+        const res = await axios.get(`/api/follow/list`, {
+          params: { userId: currentUserId }
+        });
         setFollowers(res.data.pendingRequestsToMe || []);
         setPending(res.data.pendingRequestsFromMe || []);
         setMatches(res.data.approvedMatches || []);
-      } catch (e: unknown) {
-         console.error("Failed to fetch follow lists:", e);
-         setError('リストの取得に失敗しました。');
+      } catch (e) {
+         console.error(e);
+         setError('リストの取得に失敗しました');
       } finally {
         setLoading(false);
       }
     };
     fetchLists();
-  }, [spotifyUserId, router.isReady]); // 👈 spotifyUserId が変更されたら再実行
+  }, [currentUserId]);
 
   const handleAccept = async (followId: number) => {
-    if (!spotifyUserId || acceptingId) return;
+    if (!currentUserId || acceptingId) return;
     setAcceptingId(followId);
     try {
       await axios.post('/api/follow/accept', {
-        selfSpotifyId: spotifyUserId,
+        userId: currentUserId,
         followId: followId,
       });
       router.reload();
-    } catch (e: unknown) {
-      console.error("Failed to accept follow request:", e);
-      alert('承認に失敗しました。');
+    } catch (e) {
+      console.error(e);
+      alert('承認に失敗しました');
       setAcceptingId(null);
     }
   };
 
-  if (loading) return <div className="p-4 text-center">読み込み中...</div>;
+  if (loading) return <div className="p-4 text-center text-white">読み込み中...</div>;
   if (error) return <div className="p-4 text-center text-red-500">{error}</div>;
   
-  const userDetailLink = (userId: string) => ({
-      pathname: `/user/${userId}`,
-      query: { selfSpotifyId: spotifyUserId }
-  });
+  const userDetailLink = (targetId: string) => `/user/${targetId}`;
 
   return (
-    <div className="p-4 max-w-lg mx-auto text-white">
-      <h1 className="text-3xl font-bold mb-6">フォロー</h1>
+    <div className="p-4 max-w-lg mx-auto text-white min-h-screen">
+      <h1 className="text-3xl font-bold mb-6">フォロー状況</h1>
 
-      {/* ▼▼▼ 1. 順序変更: 相互フォロー (旧フォロー一覧) ▼▼▼ */}
+      {/* 1. 相互フォロー (マッチング) */}
       <section className="mb-8">
-        {/* ▼ 文言変更 ▼ */}
-        <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">相互フォロー</h2>
+        <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">相互フォロー (マッチング)</h2>
         {matches.length > 0 ? (
           <ul className="space-y-3">
             {matches.map(match => (
               <li key={match.id}>
-                <Link href={userDetailLink(match.user_id)} className="block bg-gray-700 p-4 rounded-lg flex items-center space-x-4 hover:bg-gray-600 transition-colors duration-150 shadow">
+                <Link href={userDetailLink(match.user_id)} className="block bg-gray-800 p-4 rounded-lg flex items-center space-x-4 hover:bg-gray-700 transition-colors shadow">
                   {match.profile_image_url ? (
                     <Image src={match.profile_image_url} alt={match.nickname} width={48} height={48} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
                   ) : (
                      <div className="w-12 h-12 rounded-full bg-gray-600 flex-shrink-0"></div>
                   )}
                   <div className="overflow-hidden">
-                    {/* ▼▼▼ 修正: [cite] 削除 ▼▼▼ */}
                     <h3 className="font-bold text-lg truncate">{match.nickname}</h3>
+                    <span className="text-xs text-green-400">チャット可能</span>
                   </div>
                 </Link>
               </li>
@@ -125,10 +113,9 @@ export default function Follows() {
         )}
       </section>
 
-      {/* ▼▼▼ 2. 順序変更: フォロワー (旧フォロワー一覧) ▼▼▼ */}
+      {/* 2. フォロワー (承認待ち) */}
       <section className="mb-8">
-        {/* ▼ 文言変更 ▼ */}
-        <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">フォロワー</h2>
+        <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">フォロワー (承認待ち)</h2>
         {followers.length > 0 ? (
           <ul className="space-y-3">
             {followers.map(req => (
@@ -139,32 +126,26 @@ export default function Follows() {
                   ): (
                     <div className="w-10 h-10 rounded-full bg-gray-600 flex-shrink-0"></div>
                   )}
-                  {/* ▼▼▼ 修正: [cite] 削除 ▼▼▼ */}
                   <span className="font-medium truncate">{req.nickname}</span>
                 </Link>
                 <button
                   onClick={() => handleAccept(req.id)}
                   disabled={acceptingId === req.id}
-                  className={`px-3 py-1 rounded text-sm font-semibold flex-shrink-0 ${
-                    acceptingId === req.id
-                     ? 'bg-gray-500 cursor-wait'
-                     : 'bg-green-600 hover:bg-green-700'
-                  }`}
+                  className="px-3 py-1 rounded text-sm font-semibold flex-shrink-0 bg-green-600 hover:bg-green-500 transition-colors"
                 >
-                  {acceptingId === req.id ? '承認中...' : '承認する'}
+                  {acceptingId === req.id ? '処理中...' : '承認する'}
                 </button>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-gray-400 text-sm">あなたをフォローしているユーザーはいません。</p>
+          <p className="text-gray-400 text-sm">新しいフォロワーはいません。</p>
         )}
       </section>
       
-      {/* ▼▼▼ 3. 順序変更: フォロー (旧承認待ち) ▼▼▼ */}
+      {/* 3. フォロー中 */}
       <section className="mb-8">
-        {/* ▼ 文言変更 ▼ */}
-        <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">フォロー</h2>
+        <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">フォロー中 (相手の承認待ち)</h2>
         {pending.length > 0 ? (
           <ul className="space-y-3">
             {pending.map(req => (
@@ -175,15 +156,14 @@ export default function Follows() {
                   ): (
                     <div className="w-10 h-10 rounded-full bg-gray-600 flex-shrink-0"></div>
                   )}
-                  {/* ▼▼▼ 修正: [cite] 削除 ▼▼▼ */}
                   <span className="font-medium truncate">{req.nickname}</span>
                 </Link>
-                <span className="text-sm text-gray-400 flex-shrink-0">承認待ち</span>
+                <span className="text-sm text-gray-400 flex-shrink-0">申請中</span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-gray-400 text-sm">あなたがフォロー中のユーザーはいません。</p>
+          <p className="text-gray-400 text-sm">フォロー中のユーザーはいません。</p>
         )}
       </section>
 
