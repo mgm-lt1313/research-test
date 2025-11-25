@@ -1,15 +1,14 @@
-// pages/chats.tsx
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import axios from 'axios';
 import Image from 'next/image';
 import Link from 'next/link';
+import { supabase } from '../lib/supabaseClient';
 
-// マッチ済みの相手の型
 interface ApprovedMatch {
-  match_id: number; // followsテーブルのID (チャットルームID)
+  match_id: number;
   other_user: {
-    id: string; // 相手のuser ID (uuid)
+    id: string;
     nickname: string;
     profile_image_url: string | null;
   };
@@ -17,71 +16,75 @@ interface ApprovedMatch {
 
 export default function Chats() {
   const router = useRouter();
-  // ▼▼▼ 修正: LocalStorage からのフォールバックを追加 ▼▼▼
-  const [spotifyUserId, setSpotifyUserId] = useState<string | undefined>(router.query.spotifyUserId as string | undefined);
-  
-  useEffect(() => {
-    if (router.isReady && !spotifyUserId) {
-        const storedId = localStorage.getItem('spotify_user_id');
-        if (storedId) {
-            setSpotifyUserId(storedId);
-        }
-    }
-  }, [router.isReady, spotifyUserId]);
-  // ▲▲▲ 修正ここまで ▲▲▲
-
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [matches, setMatches] = useState<ApprovedMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!spotifyUserId) {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setCurrentUserId(session.user.id);
+      } else {
         if(router.isReady) {
-            setError('ユーザー情報がありません。');
+            setError('ログインしてください。');
             setLoading(false);
         }
-        return;
-    }
-    // ▲▲▲ 修正ここまで ▲▲▲
+      }
+    };
+    checkUser();
+  }, [router.isReady]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
 
     const fetchMatches = async () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await axios.get(`/api/chat/list?spotifyUserId=${spotifyUserId}`);
+        // userId を渡してAPI呼び出し
+        const res = await axios.get(`/api/chat/list`, {
+            params: { userId: currentUserId }
+        });
         setMatches(res.data.approvedMatches || []);
-      } catch (e: unknown) {
-         console.error("Failed to fetch chat lists:", e);
+      } catch (e) {
+         console.error(e);
          setError('チャットリストの取得に失敗しました。');
       } finally {
         setLoading(false);
       }
     };
     fetchMatches();
-  }, [spotifyUserId, router.isReady]); // 👈 spotifyUserId が変更されたら再実行
+  }, [currentUserId]);
 
-  if (loading) return <div className="p-4 text-center">読み込み中...</div>;
+  if (loading) return <div className="p-4 text-center text-white">読み込み中...</div>;
   if (error) return <div className="p-4 text-center text-red-500">{error}</div>;
 
   return (
     <div className="p-4 max-w-lg mx-auto text-white">
-      {/* ▼▼▼ 修正: [cite] 削除 ▼▼▼ */}
       <h1 className="text-3xl font-bold mb-6">チャット</h1>
 
-      {/* --- マッチ一覧 (チャットルームへのリンク) --- */}
       <section>
         {matches.length > 0 ? (
           <ul className="space-y-3">
             {matches.map(match => (
-              // ▼▼▼ li を flex コンテナに変更 ▼▼▼
               <li 
                 key={match.match_id}
                 className="bg-gray-800 p-4 rounded-lg flex items-center justify-between space-x-4 shadow"
               >
-                {/* 1. チャットルームへのリンク (flex-grow) */}
+                {/* チャットルームへのリンク */}
                 <Link
-                  href={`/chat/${match.match_id}?selfSpotifyId=${spotifyUserId}&otherUserId=${match.other_user.id}&otherNickname=${encodeURIComponent(match.other_user.nickname)}&otherImageUrl=${encodeURIComponent(match.other_user.profile_image_url || '')}`}
-                  className="flex items-center space-x-4 hover:bg-gray-700 transition-colors duration-150 p-2 rounded-l-md -m-2 flex-grow min-w-0" // 👈 p-2, -m-2 でクリック範囲拡大
+                  // パラメータをGoogle認証版に合わせて修正
+                  href={{
+                      pathname: `/chat/${match.match_id}`,
+                      query: {
+                          otherUserId: match.other_user.id,
+                          otherNickname: match.other_user.nickname,
+                          otherImageUrl: match.other_user.profile_image_url
+                      }
+                  }}
+                  className="flex items-center space-x-4 hover:bg-gray-700 transition-colors duration-150 p-2 rounded-l-md -m-2 flex-grow min-w-0"
                 >
                   {match.other_user.profile_image_url ? (
                     <Image src={match.other_user.profile_image_url} alt={match.other_user.nickname} width={48} height={48} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
@@ -90,30 +93,17 @@ export default function Chats() {
                   )}
                   <div className="overflow-hidden">
                     <h3 className="font-bold text-lg truncate">{match.other_user.nickname}</h3>
-                    <p className="text-gray-300 text-sm truncate">(チャットを開始する)</p>
+                    <p className="text-gray-300 text-sm truncate text-green-400">チャットを開始する &gt;</p>
                   </div>
                 </Link>
-                
-                {/* 2. ユーザー詳細への「...」リンク (flex-shrink-0) */}
-                <Link 
-                  href={{
-                      pathname: `/user/${match.other_user.id}`,
-                      query: { selfSpotifyId: spotifyUserId }
-                  }}
-                  className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-gray-700 flex-shrink-0"
-                  title="ユーザー詳細を見る"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                  </svg>
-                </Link>
-                {/* ▲▲▲ 修正ここまで ▲▲▲ */}
-                
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-gray-400 text-sm">チャット可能なユーザーがいません。</p>
+          <div className="text-center text-gray-400 mt-10">
+            <p>チャット可能な相手がいません。</p>
+            <p className="text-sm mt-2">「マッチング」画面で気になる相手をフォローし、<br/>承認されるとチャットができます。</p>
+          </div>
         )}
       </section>
     </div>
