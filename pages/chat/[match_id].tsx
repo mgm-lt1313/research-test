@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 
 interface Message {
-    id: number;
+    id: number | string; // 数値・文字列どちらも許容
     created_at: string;
     sender_id: string;
     content: string;
@@ -61,13 +61,15 @@ export default function ChatRoom() {
                 filter: `match_id=eq.${match_id}` 
             }, (payload) => {
                 const newMsg = payload.new as Message;
-                // 既に表示されているメッセージ(APIレスポンス等)と重複しないかチェック
+                // ▼▼▼ 修正箇所: IDを文字列に変換して比較することで重複を防ぐ ▼▼▼
                 setMessages(prev => {
-                    if (prev.some(msg => msg.id === newMsg.id)) {
+                    // 既に同じIDのメッセージがあれば追加しない
+                    if (prev.some(msg => String(msg.id) === String(newMsg.id))) {
                         return prev;
                     }
                     return [...prev, newMsg];
                 });
+                // ▲▲▲ 修正ここまで ▲▲▲
             })
             .subscribe();
 
@@ -96,7 +98,13 @@ export default function ChatRoom() {
             // APIレスポンスから新しいメッセージを取得して即座に追加
             const sentMsg = res.data.newMessage;
             if (sentMsg) {
-                setMessages(prev => [...prev, sentMsg]);
+                setMessages(prev => {
+                    // ここでも念のため重複チェック
+                    if (prev.some(msg => String(msg.id) === String(sentMsg.id))) {
+                        return prev;
+                    }
+                    return [...prev, sentMsg];
+                });
             }
         } catch (err) {
            console.error("Send error:", err);
