@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, ChangeEvent } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
-import { HOBBY_TAGS } from '../lib/constants';
+import { HOBBY_CATEGORIES } from '../lib/constants'; // 変更：カテゴリ付きの定数をインポート
 import Image from 'next/image';
 import axios from 'axios';
 
@@ -34,7 +34,6 @@ export default function Profile() {
       if (profile) {
         setNickname(profile.nickname || '');
         setBio(profile.bio || '');
-        // DBの画像 > Google画像 > なし
         setProfileImageUrl(profile.profile_image_url || session.user.user_metadata.avatar_url || null);
         
         const { data: hobbies } = await supabase
@@ -51,7 +50,6 @@ export default function Profile() {
     checkUser();
   }, [router]);
 
-  // 画像選択時の処理
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0 || !user) return;
     
@@ -62,14 +60,12 @@ export default function Profile() {
     const filePath = `${fileName}`;
 
     try {
-      // Supabase Storageへアップロード
       const { error: uploadError } = await supabase.storage
         .from('profile-images')
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      // 公開URLを取得
       const { data: urlData } = supabase.storage
         .from('profile-images')
         .getPublicUrl(filePath);
@@ -101,7 +97,7 @@ export default function Profile() {
         email: user.email,
         nickname,
         bio,
-        profileImageUrl, // 画像URLを送信
+        profileImageUrl,
         hobbies: selectedHobbies
       });
       alert('保存しました！');
@@ -114,20 +110,16 @@ export default function Profile() {
     }
   };
 
-  if (loading) return <div className="p-4 text-white">読み込み中...</div>;
+  if (loading) return <div className="p-4 text-white text-center">読み込み中...</div>;
 
   return (
-    <div className="p-4 max-w-lg mx-auto bg-gray-900 text-white min-h-screen">
-      <h1 className="text-2xl font-bold mb-6">プロフィール設定</h1>
+    <div className="p-4 max-w-2xl mx-auto bg-gray-900 text-white min-h-screen">
+      <h1 className="text-2xl font-bold mb-6 text-center">プロフィール設定</h1>
       
       {/* 画像アップロードエリア */}
-      <div className="flex flex-col items-center mb-6">
-        <div className="relative w-28 h-28 mb-3 group">
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="relative w-full h-full rounded-full overflow-hidden border-2 border-gray-600 group-hover:border-green-500 transition-colors"
-            disabled={uploading}
-          >
+      <div className="flex flex-col items-center mb-8">
+        <div className="relative w-28 h-28 mb-3 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+          <div className="w-full h-full rounded-full overflow-hidden border-2 border-gray-600 group-hover:border-green-500 transition-colors relative">
             {profileImageUrl ? (
               <Image 
                 src={profileImageUrl} 
@@ -140,12 +132,11 @@ export default function Profile() {
                 No Image
               </div>
             )}
-            {/* ホバー時のオーバーレイ */}
-            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 flex items-center justify-center transition-all">
+            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 flex items-center justify-center transition-all duration-200">
               <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-bold">変更</span>
             </div>
-          </button>
-          {uploading && <div className="absolute bottom-0 right-0 text-xs text-green-400 bg-gray-800 px-1 rounded">UP中...</div>}
+          </div>
+          {uploading && <div className="absolute bottom-0 right-0 text-xs text-white bg-green-600 px-2 py-0.5 rounded-full shadow">UP中...</div>}
         </div>
         <input
           type="file"
@@ -157,51 +148,67 @@ export default function Profile() {
         <p className="text-xs text-gray-400">アイコンをクリックして画像を変更</p>
       </div>
 
-      <div className="mb-4">
-        <label className="block mb-2 text-sm text-gray-300">ニックネーム</label>
-        <input 
-          className="w-full p-3 rounded bg-gray-800 border border-gray-700 focus:border-green-500 focus:outline-none"
-          value={nickname} 
-          onChange={e => setNickname(e.target.value)} 
-        />
+      {/* 入力フォーム */}
+      <div className="space-y-6 mb-10">
+        <div>
+          <label className="block mb-2 text-sm font-semibold text-gray-300">ニックネーム <span className="text-red-500">*</span></label>
+          <input 
+            className="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none transition-all"
+            value={nickname} 
+            onChange={e => setNickname(e.target.value)}
+            placeholder="表示名を入力してください"
+          />
+        </div>
+
+        <div>
+          <label className="block mb-2 text-sm font-semibold text-gray-300">自己紹介</label>
+          <textarea 
+            className="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none transition-all"
+            rows={3}
+            value={bio} 
+            onChange={e => setBio(e.target.value)}
+            placeholder="趣味や興味について自由に書いてください"
+          />
+        </div>
       </div>
 
-      <div className="mb-4">
-        <label className="block mb-2 text-sm text-gray-300">自己紹介</label>
-        <textarea 
-          className="w-full p-3 rounded bg-gray-800 border border-gray-700 focus:border-green-500 focus:outline-none"
-          rows={3}
-          value={bio} 
-          onChange={e => setBio(e.target.value)} 
-        />
-      </div>
-
-      <div className="mb-8">
-        <label className="block mb-2 text-sm text-gray-300 font-bold">趣味タグを選択</label>
-        <div className="flex flex-wrap gap-2">
-          {HOBBY_TAGS.map(tag => (
-            <button
-              key={tag}
-              onClick={() => toggleHobby(tag)}
-              className={`px-3 py-1.5 rounded-full text-sm transition-all ${
-                selectedHobbies.includes(tag)
-                  ? 'bg-green-600 text-white shadow-md shadow-green-900'
-                  : 'bg-gray-800 text-gray-300 border border-gray-600 hover:bg-gray-700'
-              }`}
-            >
-              {tag}
-            </button>
+      {/* 趣味タグ選択エリア（カテゴリ別表示） */}
+      <div className="mb-10">
+        <h2 className="text-lg font-bold mb-4 border-b border-gray-700 pb-2">趣味タグを選択</h2>
+        <div className="space-y-6">
+          {HOBBY_CATEGORIES.map((category) => (
+            <div key={category.name}>
+              <h3 className="text-sm text-green-400 font-bold mb-3">{category.name}</h3>
+              <div className="flex flex-wrap gap-2">
+                {category.tags.map(tag => (
+                  <button
+                    key={tag}
+                    onClick={() => toggleHobby(tag)}
+                    className={`px-3 py-1.5 rounded-full text-sm transition-all duration-200 ${
+                      selectedHobbies.includes(tag)
+                        ? 'bg-green-600 text-white shadow-lg scale-105'
+                        : 'bg-gray-800 text-gray-300 border border-gray-600 hover:bg-gray-700 hover:border-gray-500'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>
 
-      <button 
-        onClick={handleSave}
-        className="w-full py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-500 transition-colors shadow-lg"
-        disabled={loading || uploading}
-      >
-        {loading ? '処理中...' : '保存してマッチングへ'}
-      </button>
+      {/* 保存ボタン */}
+      <div className="sticky bottom-6">
+        <button 
+          onClick={handleSave}
+          className="w-full py-4 bg-green-600 text-white font-bold rounded-xl hover:bg-green-500 transition-colors shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
+          disabled={loading || uploading}
+        >
+          {loading ? '保存中...' : '保存してマッチングへ'}
+        </button>
+      </div>
     </div>
   );
 }
