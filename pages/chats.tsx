@@ -73,9 +73,8 @@ export default function Chats() {
                 key={match.match_id}
                 className="bg-gray-800 p-4 rounded-lg flex items-center justify-between space-x-4 shadow"
               >
-                {/* チャットルームへのリンク */}
+                {/* チャットルームへのリンク（メインエリア） */}
                 <Link
-                  // パラメータをGoogle認証版に合わせて修正
                   href={{
                       pathname: `/chat/${match.match_id}`,
                       query: {
@@ -96,6 +95,19 @@ export default function Chats() {
                     <p className="text-gray-300 text-sm truncate text-green-400">チャットを開始する &gt;</p>
                   </div>
                 </Link>
+                
+                {/* ▼▼▼ 追加: ユーザー詳細への「...」ボタン ▼▼▼ */}
+                <Link
+                  href={`/user/${match.other_user.id}`}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-full transition-colors flex-shrink-0"
+                  title="ユーザー詳細を見る"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM18.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+                  </svg>
+                </Link>
+                {/* ▲▲▲ 追加ここまで ▲▲▲ */}
+
               </li>
             ))}
           </ul>
